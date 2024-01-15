@@ -73,9 +73,12 @@ QA_CHAIN_PROMPT = PromptTemplate(
 
 def load_docs(repo_path: str, *, path_to_package: str | None = None) -> list[Document]:
     def file_filter(file_path: str) -> bool:
+        is_meta = file_path.lower().endswith((".lock", ".md"))
         if not path_to_package:
-            return True
-        return file_path.startswith(os.path.join(repo_path, path_to_package))
+            return not is_meta
+        return not is_meta and file_path.startswith(
+            os.path.join(repo_path, path_to_package)
+        )
 
     # TODO: Need to pick the branch from git
     loader = GitLoader(repo_path=repo_path, branch="master", file_filter=file_filter)
