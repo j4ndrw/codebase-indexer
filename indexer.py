@@ -4,7 +4,7 @@ from typing import Callable
 
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.chains import LLMChain, RetrievalQA
+from langchain.chains import RetrievalQA
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import Language, RecursiveCharacterTextSplitter
@@ -50,19 +50,19 @@ def collection_name(repo_path: str) -> str:
 
 
 def prompt_format():
-    system_prompt = """You are a senior software engineer, you will use the provided context to answer user questions.
+    system_prompt = """You are a helpful assistant, you will use the provided context to answer user questions.
     Read the given context before answering questions and think step by step. If you cannot answer a user question based on
-    the provided context, inform the user. Do not use any other information for answering user and do not make up answers. Only answer
-    based on real information"""
+    the provided context, inform the user. Do not use any other information for answering user."""
 
     instruction = """
     Context: {context}
     User: {question}"""
 
-    B_INST, E_INST = "[INST]", "[/INST]"
-    B_SYS, E_SYS = "<<SYS>>\n", "<</SYS>>\n\n"
+    B_INST, E_INST = "[INST]\n", "[/INST]"
+    B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
+    SYSTEM_PROMPT = B_SYS + system_prompt + E_SYS
 
-    return B_INST + B_SYS + system_prompt + E_SYS + instruction + E_INST
+    return B_INST + SYSTEM_PROMPT + instruction + E_INST
 
 
 QA_CHAIN_PROMPT = PromptTemplate(
@@ -73,7 +73,23 @@ QA_CHAIN_PROMPT = PromptTemplate(
 
 def load_docs(repo_path: str, *, path_to_package: str | None = None) -> list[Document]:
     def file_filter(file_path: str) -> bool:
-        is_meta = file_path.lower().endswith((".lock", ".md"))
+        is_meta = file_path.lower().endswith(
+            (
+                ".lock",
+                ".md",
+                "lock.yaml",
+                "lock.yml",
+                "lock.json",
+                ".gitkeep",
+                ".gitattributes",
+                ".gitignore",
+                ".git",
+                ".xml",
+                ".log",
+                ".csv",
+                ".jmx",
+            )
+        )
         if not path_to_package:
             return not is_meta
         return not is_meta and file_path.startswith(
@@ -111,7 +127,7 @@ def create_index(
     docs: list[Document] = []
     if is_monorepo:
         path_to_package = input(
-            "Which package do you want to load? (E.g. ./packages/ui)"
+            "Which package do you want to load? (E.g. ./packages/ui)\n> "
         )
         docs = load_docs(repo_path, path_to_package=path_to_package)
         repo_path = os.path.join(repo_path, path_to_package)
@@ -137,7 +153,7 @@ def load_index(
 ) -> tuple[str, Chroma] | None:
     if is_monorepo:
         path_to_package = input(
-            "Which package do you want to load? (E.g. ./packages/ui)"
+            "Which package do you want to load? (E.g. ./packages/ui)\n> "
         )
         repo_path = os.path.join(repo_path, path_to_package)
 
@@ -186,7 +202,7 @@ if __name__ == "__main__":
     repo_path = os.path.abspath(os.path.join(os.path.curdir, args.repo_path))
     ollama_inference_model = args.ollama_inference_model
     ollama_embeddings_model = args.ollama_embeddings_model
-    vector_db_dir = args.vector_db_dir or repo_path + DEFAULT_VECTOR_DB_DIR
+    vector_db_dir = args.vector_db_dir or os.path.join(repo_path, DEFAULT_VECTOR_DB_DIR)
     is_monorepo = args.monorepo
 
     if not repo_path:
@@ -197,7 +213,6 @@ if __name__ == "__main__":
         model=ollama_embeddings_model,
         num_gpu=1,
         num_thread=4,
-        num_ctx=5000,
         show_progress=True,
     )
 
@@ -208,7 +223,9 @@ if __name__ == "__main__":
         is_monorepo,
     )
     repo_path, db = load_index(*indexing_args) or create_index(*indexing_args)
-    retriever = db.as_retriever(search_type="mmr")
+    retriever = db.as_retriever(
+        search_type="mmr", search_kwargs={"k": 5, "fetch_k": 50}
+    )
 
     callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
     llm = ChatOllama(
@@ -216,25 +233,20 @@ if __name__ == "__main__":
         model=ollama_inference_model,
         callback_manager=callback_manager,
         verbose=True,
+        num_ctx=5000,
+        num_gpu=1,
     )
 
     while True:
         query = input(">>> ")
 
-        retrieval_qa = RetrievalQA.from_chain_type(
+        retrieval_qa = RetrievalQA.from_llm(
             llm=llm,
-            chain_type="stuff",
             retriever=retriever,
+            prompt=QA_CHAIN_PROMPT,
             verbose=True,
-            chain_type_kwargs={
-                "verbose": True,
-                "prompt": QA_CHAIN_PROMPT,
-                "memory": ConversationBufferMemory(
-                    memory_key="history", input_key="question"
-                ),
-            },
         )
 
         docs = retriever.get_relevant_documents(query)
-        retrieval_qa.run({"query": query})
+        retrieval_qa.run({"input_documents": docs, "query": query})
         print("\n")
