@@ -1,4 +1,4 @@
-import os
+from os import PathLike
 from typing import Callable
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -11,10 +11,10 @@ from codebase_indexer.constants import LANGUAGES
 
 
 def collection_name(repo_path: str) -> str:
-    return repo_path.rsplit("/", 1)[0].split("/", 1)[1].replace("/", "-")
+    return repo_path.replace("/", "-").replace("~", "")[1:]
 
 
-def load_docs(repo_path: str) -> list[Document]:
+def load_docs(repo_path: PathLike[str]) -> list[Document]:
     def file_filter(file_path: str) -> bool:
         is_meta = file_path.lower().endswith(
             (
@@ -43,7 +43,9 @@ def load_docs(repo_path: str) -> list[Document]:
         for language in LANGUAGES
     }
 
-    loader = GitLoader(repo_path=repo_path, branch="master", file_filter=file_filter)
+    loader = GitLoader(
+        repo_path=str(repo_path), branch="master", file_filter=file_filter
+    )
     docs = loader.load()
 
     for language in LANGUAGES:
@@ -58,28 +60,28 @@ def load_docs(repo_path: str) -> list[Document]:
 
 
 def create_index(
-    repo_path: str,
+    repo_path: PathLike,
     vector_db_dir: str,
     embeddings_factory: Callable[[], GPT4AllEmbeddings],
-) -> tuple[str, Chroma]:
+) -> tuple[PathLike[str], Chroma]:
     docs = load_docs(repo_path)
     db = Chroma.from_documents(
         docs,
         embeddings_factory(),
         persist_directory=vector_db_dir,
-        collection_name=collection_name(repo_path),
+        collection_name=collection_name(str(repo_path)),
     )
     print("Indexed documents")
     return repo_path, db
 
 
 def load_index(
-    repo_path: str,
+    repo_path: PathLike[str],
     vector_db_dir: str,
     embeddings_factory: Callable[[], GPT4AllEmbeddings],
-) -> tuple[str, Chroma] | None:
+) -> tuple[PathLike[str], Chroma] | None:
     store = Chroma(
-        collection_name(repo_path),
+        collection_name(str(repo_path)),
         embeddings_factory(),
         persist_directory=vector_db_dir,
     )

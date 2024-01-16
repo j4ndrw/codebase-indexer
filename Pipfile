@@ -11,6 +11,8 @@ gitpython = "*"
 gpt4all = "*"
 fastembed = "*"
 langchainhub = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+fastapi = "*"
 
 [dev-packages]
 

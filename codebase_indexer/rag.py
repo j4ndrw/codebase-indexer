@@ -1,5 +1,8 @@
+from os import PathLike
+
 from gpt4all import Embed4All
 from langchain import hub
+from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.chains import ConversationalRetrievalChain, RetrievalQA
@@ -14,7 +17,7 @@ from codebase_indexer.vector_store import create_index, load_index
 
 
 def init_vector_store(
-    repo_path: str,
+    repo_path: PathLike,
     vector_db_dir: str,
 ) -> VectorStoreRetriever:
     embeddings_factory = lambda: GPT4AllEmbeddings(client=Embed4All)
@@ -30,9 +33,11 @@ def init_vector_store(
 
 
 def init_llm(
-    retriever: VectorStoreRetriever, ollama_inference_model: str | None = None
+    retriever: VectorStoreRetriever,
+    ollama_inference_model: str | None = None,
+    *callbacks: BaseCallbackHandler
 ):
-    callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+    callback_manager = CallbackManager([*callbacks])
     llm = ChatOllama(
         base_url=OLLAMA_BASE_URL,
         model=ollama_inference_model or DEFAULT_OLLAMA_INFERENCE_MODEL,
