@@ -1,3 +1,4 @@
+import os
 from os import PathLike
 
 from gpt4all import Embed4All

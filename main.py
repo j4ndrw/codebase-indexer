@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+import uvicorn
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from langchain.chains.conversational_retrieval.base import (
-    BaseConversationalRetrievalChain,
-)
+from langchain.chains.conversational_retrieval.base import \
+    BaseConversationalRetrievalChain
 from langchain_community.chat_models import ChatOllama
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 from langchain_core.vectorstores import VectorStoreRetriever
@@ -134,3 +134,7 @@ async def ask(repo_path: str, question: str):
     ).start()
 
     return StreamingResponse(g, media_type="text/event-stream")
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, port=11435)
