@@ -7,16 +7,10 @@ name = "pypi"
 langchain = "*"
 chromadb = "*"
 langchain-community = "*"
-tiktoken = "*"
-esprima = "*"
-tqdm = "*"
 gitpython = "*"
-psutil = "*"
-pip = "*"
-install = "*"
 gpt4all = "*"
 fastembed = "*"
-sentence-transformers = "*"
+langchainhub = "*"
 
 [dev-packages]
 
