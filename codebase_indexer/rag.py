@@ -17,11 +17,12 @@ from codebase_indexer.vector_store import create_index, load_index
 
 def init_vector_store(
     repo_path: PathLike,
+    branch: str,
     vector_db_dir: str,
 ) -> VectorStoreRetriever:
     embeddings_factory = lambda: GPT4AllEmbeddings(client=Embed4All)
 
-    indexing_args = (repo_path, vector_db_dir, embeddings_factory)
+    indexing_args = (repo_path, branch, vector_db_dir, embeddings_factory)
     repo_path, db = load_index(*indexing_args) or create_index(*indexing_args)
 
     retriever = db.as_retriever(

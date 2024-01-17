@@ -10,11 +10,11 @@ from langchain_core.documents import Document
 from codebase_indexer.constants import LANGUAGE_FILE_EXTS, LANGUAGES
 
 
-def collection_name(repo_path: str) -> str:
-    return repo_path.replace("/", "-").replace("~", "")[1:]
+def collection_name(repo_path: str, branch: str) -> str:
+    return repo_path.replace("/", "-").replace("~", "")[1:] + branch
 
 
-def load_docs(repo_path: PathLike[str]) -> list[Document]:
+def load_docs(repo_path: PathLike[str], branch: str) -> list[Document]:
     def file_filter(file_path: str) -> bool:
         is_meta = file_path.lower().endswith(
             (
@@ -43,9 +43,7 @@ def load_docs(repo_path: PathLike[str]) -> list[Document]:
         for language in LANGUAGES
     }
 
-    loader = GitLoader(
-        repo_path=str(repo_path), branch="master", file_filter=file_filter
-    )
+    loader = GitLoader(repo_path=str(repo_path), branch=branch, file_filter=file_filter)
     docs = loader.load()
 
     for language in LANGUAGES:
@@ -62,15 +60,16 @@ def load_docs(repo_path: PathLike[str]) -> list[Document]:
 
 def create_index(
     repo_path: PathLike,
+    branch: str,
     vector_db_dir: str,
     embeddings_factory: Callable[[], GPT4AllEmbeddings],
 ) -> tuple[PathLike[str], Chroma]:
-    docs = load_docs(repo_path)
+    docs = load_docs(repo_path, branch)
     db = Chroma.from_documents(
         docs,
         embeddings_factory(),
         persist_directory=vector_db_dir,
-        collection_name=collection_name(str(repo_path)),
+        collection_name=collection_name(str(repo_path), branch),
     )
     print("Indexed documents")
     return repo_path, db
@@ -78,11 +77,12 @@ def create_index(
 
 def load_index(
     repo_path: PathLike[str],
+    branch: str,
     vector_db_dir: str,
     embeddings_factory: Callable[[], GPT4AllEmbeddings],
 ) -> tuple[PathLike[str], Chroma] | None:
     store = Chroma(
-        collection_name(str(repo_path)),
+        collection_name(str(repo_path), branch),
         embeddings_factory(),
         persist_directory=vector_db_dir,
     )

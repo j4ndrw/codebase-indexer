@@ -9,6 +9,7 @@ import uvicorn
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from git import Repo
 from langchain.chains.conversational_retrieval.base import \
     BaseConversationalRetrievalChain
 from langchain.schema import BaseChatMessageHistory
@@ -73,6 +74,7 @@ class Meta(BaseModel):
 @dataclass
 class CodebaseIndexer:
     repo_path: str
+    branch: str
     vector_db_dir: str | None
     ollama_inference_model: str | None
     retriever: VectorStoreRetriever
@@ -92,13 +94,17 @@ async def register(body: Meta):
     if not repo_path:
         raise Exception("A repository must be specified")
 
-    retriever = init_vector_store(repo_path, vector_db_dir)
+    repo = Repo(repo_path)
+    branch = repo.active_branch.name
+
+    retriever = init_vector_store(repo_path, branch, vector_db_dir)
 
     def lazy_llm(g: ThreadedGenerator):
         return init_llm(retriever, [ChainStreamHandler(g)], body.ollama_inference_model)
 
     codebase_indexers[repo_path.as_posix()] = CodebaseIndexer(
         repo_path=repo_path.as_posix(),
+        branch=branch,
         vector_db_dir=vector_db_dir,
         ollama_inference_model=body.ollama_inference_model,
         retriever=retriever,

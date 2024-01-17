@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-from pprint import pprint
 
+from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
 from codebase_indexer.argparser import Args
@@ -15,7 +15,10 @@ def cli(args: Args):
     if not repo_path:
         raise Exception("A repository must be specified")
 
-    retriever = init_vector_store(repo_path, vector_db_dir)
+    repo = Repo(repo_path)
+    branch = repo.active_branch.name
+
+    retriever = init_vector_store(repo_path, branch, vector_db_dir)
     _, qa, chat_history = init_llm(
         retriever, [StreamingStdOutCallbackHandler()], args.ollama_inference_model
     )
