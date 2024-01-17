@@ -13,6 +13,7 @@ fastembed = "*"
 langchainhub = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 fastapi = "*"
+transformers = "*"
 
 [dev-packages]
 pyinstaller = "*"

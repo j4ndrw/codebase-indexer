@@ -1,5 +1,6 @@
 import os
 
+from langchain.prompts import PromptTemplate
 from langchain.text_splitter import Language
 
 OLLAMA_BASE_URL = "http://" + os.environ["OLLAMA_HOST"]
@@ -31,3 +32,36 @@ LANGUAGES = [
     Language.CSHARP,
     Language.COBOL,
 ]
+
+LANGUAGE_FILE_EXTS = {
+    Language.CPP: ["cpp", "cc", "c", "h", "hpp"],
+    Language.GO: ["go", "templ"],
+    Language.JAVA: ["java"],
+    Language.KOTLIN: ["kt"],
+    Language.JS: ["js", "jsx", "cjs", "mjs"],
+    Language.TS: ["ts", "tsx"],
+    Language.PHP: ["php"],
+    Language.PROTO: ["proto"],
+    Language.PYTHON: ["py"],
+    Language.RST: ["rst"],
+    Language.RUBY: ["rb"],
+    Language.RUST: ["rs"],
+    Language.SCALA: ["scala"],
+    Language.SWIFT: ["swift"],
+    Language.MARKDOWN: ["md"],
+    Language.LATEX: ["tex"],
+    Language.HTML: ["html", "cshtml"],
+    Language.SOL: ["sol"],
+    Language.CSHARP: ["cs", "cshtml"],
+    Language.COBOL: ["cbl"],
+}
+
+OPTIONAL_CONDENSE_PROMPT = """Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question, in its original language. When you rephrase, do not remove details that could be important for the conversation.
+
+Chat History:
+{chat_history}
+Follow Up Input: {question}
+Standalone question:"""
+OPTIONAL_CONDENSE_PROMPT = PromptTemplate.from_template(
+    OPTIONAL_CONDENSE_PROMPT
+)

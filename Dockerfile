@@ -20,4 +20,4 @@ COPY . ${PROJECT_DIR}/
 RUN python -m pipenv install --system --deploy
 
 EXPOSE 11435
-CMD ["python", "-m", "uvicorn", "main:app", "--port", "11435"]
+ENTRYPOINT ["python", "main.py"]

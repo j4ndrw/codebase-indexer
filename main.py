@@ -11,11 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain.chains.conversational_retrieval.base import \
     BaseConversationalRetrievalChain
+from langchain.schema import BaseChatMessageHistory
 from langchain_community.chat_models import ChatOllama
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 from langchain_core.vectorstores import VectorStoreRetriever
 from pydantic import BaseModel
 
+from codebase_indexer.argparser import parse_args
+from codebase_indexer.cli import cli
 from codebase_indexer.constants import DEFAULT_VECTOR_DB_DIR
 from codebase_indexer.rag import init_llm, init_vector_store
 
@@ -74,7 +77,8 @@ class CodebaseIndexer:
     ollama_inference_model: str | None
     retriever: VectorStoreRetriever
     lazy_llm: Callable[
-        [ThreadedGenerator], tuple[ChatOllama, BaseConversationalRetrievalChain]
+        [ThreadedGenerator],
+        tuple[ChatOllama, BaseConversationalRetrievalChain, BaseChatMessageHistory],
     ]
 
 
@@ -91,7 +95,7 @@ async def register(body: Meta):
     retriever = init_vector_store(repo_path, vector_db_dir)
 
     def lazy_llm(g: ThreadedGenerator):
-        return init_llm(retriever, body.ollama_inference_model, ChainStreamHandler(g))
+        return init_llm(retriever, [ChainStreamHandler(g)], body.ollama_inference_model)
 
     codebase_indexers[repo_path.as_posix()] = CodebaseIndexer(
         repo_path=repo_path.as_posix(),
@@ -110,8 +114,8 @@ class Question(BaseModel):
 
 def llm_qa_thread(g: ThreadedGenerator, repo_path: str, question: str):
     try:
-        _, qa = codebase_indexers[repo_path].lazy_llm(g)
-        qa.invoke({"question": question})
+        _, qa, chat_history = codebase_indexers[repo_path].lazy_llm(g)
+        qa.invoke({"question": question, "chat_history": chat_history})
     finally:
         g.close()
 
@@ -137,4 +141,8 @@ async def ask(repo_path: str, question: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, port=11435)
+    args = parse_args()
+    if args is not None:
+        cli(args)
+    else:
+        uvicorn.run(app, port=11435)
