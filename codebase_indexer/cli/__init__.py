@@ -4,9 +4,9 @@ from pathlib import Path
 from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
-from codebase_indexer.argparser import Args
+from codebase_indexer.cli.argparser import Args
 from codebase_indexer.constants import DEFAULT_VECTOR_DB_DIR
-from codebase_indexer.rag import init_llm, init_vector_store
+from codebase_indexer.rag import RAGBuilder, init_vector_store
 
 
 def cli(args: Args):
@@ -19,8 +19,11 @@ def cli(args: Args):
     branch = repo.active_branch.name
 
     retriever = init_vector_store(repo_path, branch, vector_db_dir)
-    _, qa, chat_history = init_llm(
-        retriever, [StreamingStdOutCallbackHandler()], args.ollama_inference_model
+    qa, chat_history = (
+        RAGBuilder(retriever, args.ollama_inference_model)
+        .set_callbacks("memory", [StreamingStdOutCallbackHandler()])
+        .set_callbacks("qa", [StreamingStdOutCallbackHandler()])
+        .build()
     )
 
     while True:
