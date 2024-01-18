@@ -827,11 +827,11 @@
         },
         "langsmith": {
             "hashes": [
-                "sha256:5838e5a4bb1939e9794eb3f802f7c390247a847bd603e31442be5be00068e504",
-                "sha256:eb816ad456776ec4c6005ddce8a4c315a1a582ed4d079979888e9f8a1db209b3"
+                "sha256:0645e0315e836f36a7b5de34efb765fcf3abda1ac79bcaf7a66d40c40e942ae4",
+                "sha256:b17eed8351bcb375e46ce6d47e1b9bdd41826d0cc167eb96cbe0989ca966ce57"
             ],
             "markers": "python_version < '4.0' and python_full_version >= '3.8.1'",
-            "version": "==0.0.81"
+            "version": "==0.0.82"
         },
         "marshmallow": {
             "hashes": [
@@ -2001,7 +2001,7 @@
                 "sha256:23478f88c37f27d76ac8aee6c905017a143b0b1b886c3c9f66bc2fd94f9f5783",
                 "sha256:af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd"
             ],
-            "markers": "python_version < '3.11'",
+            "markers": "python_version >= '3.8'",
             "version": "==4.9.0"
         },
         "typing-inspect": {

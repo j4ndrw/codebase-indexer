@@ -1,17 +1,22 @@
+import os
 from os import PathLike
+from pathlib import Path
 from typing import Callable
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders.git import GitLoader
-from langchain_community.embeddings import GPT4AllEmbeddings
 from langchain_community.vectorstores.chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 
 from codebase_indexer.constants import LANGUAGE_FILE_EXTS, LANGUAGES
 
 
-def collection_name(repo_path: str, branch: str) -> str:
-    return repo_path.replace("/", "-").replace("~", "")[1:] + branch
+def collection_name(repo_path: str) -> str:
+    try:
+        return repo_path.split("/")[-1]
+    except IndexError:
+        return repo_path.replace("/", "-").replace("~", "")[1:]
 
 
 def load_docs(repo_path: PathLike[str], branch: str) -> list[Document]:
@@ -62,14 +67,14 @@ def create_index(
     repo_path: PathLike,
     branch: str,
     vector_db_dir: str,
-    embeddings_factory: Callable[[], GPT4AllEmbeddings],
+    embeddings_factory: Callable[[], Embeddings],
 ) -> tuple[PathLike[str], Chroma]:
     docs = load_docs(repo_path, branch)
     db = Chroma.from_documents(
         docs,
         embeddings_factory(),
-        persist_directory=vector_db_dir,
-        collection_name=collection_name(str(repo_path), branch),
+        persist_directory=Path(os.path.join(vector_db_dir, branch)).as_posix(),
+        collection_name=collection_name(str(repo_path)),
     )
     print("Indexed documents")
     return repo_path, db
@@ -79,12 +84,12 @@ def load_index(
     repo_path: PathLike[str],
     branch: str,
     vector_db_dir: str,
-    embeddings_factory: Callable[[], GPT4AllEmbeddings],
+    embeddings_factory: Callable[[], Embeddings],
 ) -> tuple[PathLike[str], Chroma] | None:
     store = Chroma(
-        collection_name(str(repo_path), branch),
+        collection_name(str(repo_path)),
         embeddings_factory(),
-        persist_directory=vector_db_dir,
+        persist_directory=Path(os.path.join(vector_db_dir, branch)).as_posix(),
     )
     result = store.get()
     if len(result["documents"]) == 0:

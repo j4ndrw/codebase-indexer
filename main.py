@@ -10,12 +10,12 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from git import Repo
-from langchain.chains.conversational_retrieval.base import \
-    BaseConversationalRetrievalChain
-from langchain.schema import BaseChatMessageHistory
-from langchain_community.chat_models import ChatOllama
+from langchain.chains.conversational_retrieval.base import (
+    BaseConversationalRetrievalChain,
+)
+from langchain.schema import BaseChatMessageHistory, BaseRetriever
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
-from langchain_core.vectorstores import VectorStoreRetriever
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 
 from codebase_indexer.argparser import parse_args
@@ -77,10 +77,10 @@ class CodebaseIndexer:
     branch: str
     vector_db_dir: str | None
     ollama_inference_model: str | None
-    retriever: VectorStoreRetriever
+    retriever: BaseRetriever
     lazy_llm: Callable[
         [ThreadedGenerator],
-        tuple[ChatOllama, BaseConversationalRetrievalChain, BaseChatMessageHistory],
+        tuple[BaseChatModel, BaseConversationalRetrievalChain, BaseChatMessageHistory],
     ]
 
 
