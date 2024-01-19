@@ -22,15 +22,15 @@ async def register(body: Meta):
     repo = Repo(repo_path)
     branch = repo.active_branch.name
 
-    retriever = init_vector_store(repo_path, branch, vector_db_dir)
-    create_rag_builder = lambda: RAGBuilder(retriever, body.ollama_inference_model)
+    db = init_vector_store(repo_path, branch, vector_db_dir)
+    create_rag_builder = lambda: RAGBuilder(db, body.ollama_inference_model)
 
     codebase_indexers[repo_path.as_posix()] = CodebaseIndexer(
         repo_path=repo_path.as_posix(),
         branch=branch,
         vector_db_dir=vector_db_dir,
         ollama_inference_model=body.ollama_inference_model,
-        retriever=retriever,
+        db=db,
         create_rag_builder=create_rag_builder,
     )
     return Response(None, 200)

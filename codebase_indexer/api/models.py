@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from langchain.schema import BaseRetriever
+from langchain_community.vectorstores.chroma import Chroma
 from pydantic import BaseModel
 
 from codebase_indexer.rag import RAGBuilder
@@ -19,5 +19,5 @@ class CodebaseIndexer:
     branch: str
     vector_db_dir: str | None
     ollama_inference_model: str | None
-    retriever: BaseRetriever
+    db: Chroma
     create_rag_builder: Callable[[], RAGBuilder]

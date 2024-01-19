@@ -18,9 +18,9 @@ def cli(args: Args):
     repo = Repo(repo_path)
     branch = repo.active_branch.name
 
-    retriever = init_vector_store(repo_path, branch, vector_db_dir)
+    db = init_vector_store(repo_path, branch, vector_db_dir)
     qa, chat_history = (
-        RAGBuilder(retriever, args.ollama_inference_model)
+        RAGBuilder(db, args.ollama_inference_model)
         .set_callbacks("memory", [StreamingStdOutCallbackHandler()])
         .set_callbacks("qa", [StreamingStdOutCallbackHandler()])
         .build()
