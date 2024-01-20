@@ -1,26 +1,34 @@
+from dataclasses import dataclass, field
 from os import PathLike
-from typing import Literal
+from typing import Any, Literal
 
 from gpt4all import Embed4All
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.manager import CallbackManager
 from langchain.chains import ConversationalRetrievalChain
-from langchain.chains.conversational_retrieval.base import \
-    BaseConversationalRetrievalChain
+from langchain.chains.conversational_retrieval.base import (
+    BaseConversationalRetrievalChain,
+)
 from langchain.memory import ChatMessageHistory, ConversationSummaryMemory
 from langchain.schema import BaseChatMessageHistory
 from langchain_community.chat_models import ChatOllama
 from langchain_community.vectorstores.chroma import Chroma
 from langchain_core.language_models import BaseChatModel
 
-from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
-                                        OLLAMA_BASE_URL)
+from codebase_indexer.constants import DEFAULT_OLLAMA_INFERENCE_MODEL, OLLAMA_BASE_URL
 from codebase_indexer.rag.embedding import CustomGPT4AllEmbeddings
 from codebase_indexer.rag.prompts import CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT
 from codebase_indexer.rag.vector_store import create_index, load_index
 
 
+@dataclass
+class Context:
+    current_file: str | None = None
+    related_files: list[str] = field(default_factory=list)
+
+
 def init_vector_store(
+    *,
     repo_path: PathLike,
     branch: str,
     vector_db_dir: str,
@@ -34,7 +42,7 @@ def init_vector_store(
 
 
 def init_llm(
-    callbacks: list[BaseCallbackHandler], ollama_inference_model: str | None = None
+    *, callbacks: list[BaseCallbackHandler], ollama_inference_model: str | None = None
 ):
     llm = ChatOllama(
         base_url=OLLAMA_BASE_URL,
@@ -46,10 +54,41 @@ def init_llm(
     return llm
 
 
-def init_rag(db: Chroma, memory_llm: BaseChatModel, qa_llm: BaseChatModel):
-    retriever = db.as_retriever(
-        search_type="mmr", search_kwargs={"k": 5, "fetch_k": 1000}
+def init_rag(
+    *,
+    db: Chroma,
+    memory_llm: BaseChatModel,
+    qa_llm: BaseChatModel,
+    context: Context | None = None,
+):
+    retriever_kwargs: dict[str, str | dict[str, Any]] = dict(
+        search_type="mmr", search_kwargs=dict(k=5, fetch_k=1000)
     )
+
+    related_files = []
+    if context is not None:
+        collection = db.get()
+        metadatas = collection.get("metadatas", [])
+        for metadata in metadatas:
+            source = metadata.get("source", None)
+            if source is None:
+                continue
+            for related_file_idx, related_file in enumerate(context.related_files):
+                if related_file in source:
+                    context.related_files[related_file_idx] = source
+
+        related_files.extend(context.related_files)
+
+        if context is not None:
+            retriever_kwargs["search_kwargs"]["filter"] = {  # type: ignore
+                "source": {
+                    "$in": list(
+                        filter(None, [context.current_file, *context.related_files])
+                    )
+                }
+            }
+
+    retriever = db.as_retriever(**retriever_kwargs)
     chat_history = ChatMessageHistory()
     memory = ConversationSummaryMemory(
         llm=memory_llm,
@@ -73,10 +112,14 @@ class RAGBuilder:
     memory_llm: BaseChatModel
     qa_llm: BaseChatModel
 
+    ollama_inference_model: str | None = None
+
     qa: BaseConversationalRetrievalChain
     chat_history: BaseChatMessageHistory
 
     rag: tuple[BaseConversationalRetrievalChain, BaseChatMessageHistory] | None = None
+
+    context: Context | None
 
     def __init__(
         self,
@@ -84,8 +127,16 @@ class RAGBuilder:
         ollama_inference_model: str | None = None,
     ):
         self.db = db
-        self.memory_llm = init_llm([], ollama_inference_model)
-        self.qa_llm = init_llm([], ollama_inference_model)
+        self.context = None
+
+        self.ollama_inference_model = ollama_inference_model
+
+        self.memory_llm = init_llm(
+            callbacks=[], ollama_inference_model=ollama_inference_model
+        )
+        self.qa_llm = init_llm(
+            callbacks=[], ollama_inference_model=ollama_inference_model
+        )
 
     def set_callbacks(
         self,
@@ -93,15 +144,35 @@ class RAGBuilder:
         callbacks: list[BaseCallbackHandler],
     ):
         if llm_type == "memory":
-            self.memory_llm = init_llm(callbacks)
+            self.memory_llm = init_llm(
+                callbacks=callbacks, ollama_inference_model=self.ollama_inference_model
+            )
 
         if llm_type == "qa":
-            self.qa_llm = init_llm(callbacks)
+            self.qa_llm = init_llm(
+                callbacks=callbacks, ollama_inference_model=self.ollama_inference_model
+            )
 
         return self
 
+    def set_context(self, context: Context):
+        self.context = context
+        return self
+
     def build(self):
-        if self.rag is not None:
-            return self.rag
-        self.rag = init_rag(self.db, self.memory_llm, self.qa_llm)
-        return self.rag
+        return init_rag(
+            db=self.db,
+            memory_llm=self.memory_llm,
+            qa_llm=self.qa_llm,
+            context=self.context,
+        )
+
+
+@dataclass()
+class CodebaseIndexer:
+    repo_path: str
+    branch: str
+    vector_db_dir: str | None
+    ollama_inference_model: str | None
+    db: Chroma
+    rag_builder: RAGBuilder

@@ -1,10 +1,6 @@
-from dataclasses import dataclass
-from typing import Callable
+from typing import Literal
 
-from langchain_community.vectorstores.chroma import Chroma
 from pydantic import BaseModel
-
-from codebase_indexer.rag import RAGBuilder
 
 
 class Meta(BaseModel):
@@ -13,11 +9,4 @@ class Meta(BaseModel):
     ollama_inference_model: str | None = None
 
 
-@dataclass()
-class CodebaseIndexer:
-    repo_path: str
-    branch: str
-    vector_db_dir: str | None
-    ollama_inference_model: str | None
-    db: Chroma
-    create_rag_builder: Callable[[], RAGBuilder]
+Command = Literal["test", "explain", "search", "doc", "fix", "review"]
