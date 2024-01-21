@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Callable
 
 from fastapi import Response
 from fastapi.responses import StreamingResponse
@@ -19,9 +20,11 @@ from codebase_indexer.constants import (
     DEFAULT_VECTOR_DB_DIR,
 )
 from codebase_indexer.rag import (
+    LLM,
     CodebaseIndexer,
     Context,
     OllamaLLMParams,
+    RAGComponentFactory,
     RAGFactory,
     init_vector_store,
 )
@@ -39,18 +42,43 @@ async def register(body: Meta):
     db = init_vector_store(
         repo_path=repo_path, branch=branch, vector_db_dir=vector_db_dir
     )
-    rag_builder = RAGFactory(
+    memory_params = OllamaLLMParams(
+        kind="memory",
+        inference_model=body.ollama_inference_model or DEFAULT_OLLAMA_INFERENCE_MODEL,
+    )
+    memory = RAGComponentFactory.create_memory(LLM(params=memory_params).model)
+
+    default_rag_factory: Callable[
+        [Context | None], RAGFactory
+    ] = lambda context: RAGFactory(
         db,
-        OllamaLLMParams(
-            "memory",
-            inference_model=body.ollama_inference_model
-            or DEFAULT_OLLAMA_INFERENCE_MODEL,
-        ),
-        OllamaLLMParams(
-            "qa",
-            inference_model=body.ollama_inference_model
-            or DEFAULT_OLLAMA_INFERENCE_MODEL,
-        ),
+        memory,
+        [
+            OllamaLLMParams(
+                kind="qa",
+                inference_model=body.ollama_inference_model
+                or DEFAULT_OLLAMA_INFERENCE_MODEL,
+            ),
+        ],
+    ).set_context(
+        context
+    )
+
+    specialized_rag_factory: Callable[
+        [Context | None, Command], RAGFactory
+    ] = lambda context, command: RAGFactory.from_command(
+        db,
+        memory,
+        [
+            OllamaLLMParams(
+                kind="qa",
+                inference_model=body.ollama_inference_model
+                or DEFAULT_OLLAMA_INFERENCE_MODEL,
+            ),
+        ],
+        RAGComponentFactory.from_command(command),
+    ).set_context(
+        context
     )
 
     codebase_indexers[repo_path.as_posix()] = CodebaseIndexer(
@@ -58,8 +86,10 @@ async def register(body: Meta):
         branch=branch,
         vector_db_dir=vector_db_dir,
         ollama_inference_model=body.ollama_inference_model,
+        memory=memory,
         db=db,
-        rag_builder=rag_builder,
+        default_rag_factory=default_rag_factory,
+        specialized_rag_factory=specialized_rag_factory,
     )
     return Response(None, 200)
 
@@ -71,7 +101,6 @@ def generate(qa: BaseConversationalRetrievalChain, **kwargs):
 async def stream(
     *,
     queue: Queue,
-    # TODO(j4ndrw): Need to implement commands
     command: Command | None,
     repo_path: str,
     question: str,
@@ -80,9 +109,17 @@ async def stream(
 ):
     related_files = related_files if len(related_files) > 0 else []
 
-    rag_builder = codebase_indexers[repo_path].rag_builder
+    context = Context(current_file, related_files)
+    memory = codebase_indexers[repo_path].memory
+    default_rag_factory = codebase_indexers[repo_path].default_rag_factory
+    specialized_rag_factory = codebase_indexers[repo_path].specialized_rag_factory
+    rag_factory = (
+        specialized_rag_factory(context, command)
+        if command is not None
+        else default_rag_factory(context)
+    )
     rag = (
-        rag_builder.set_callbacks("qa", [ChainStreamHandler(queue)])
+        rag_factory.set_callbacks("qa", [ChainStreamHandler(queue)])
         .set_context(Context(current_file=current_file, related_files=related_files))
         .build()
     )
@@ -91,7 +128,7 @@ async def stream(
 
     num_llms_ran = 0
 
-    qa_kwargs = {"question": question, "chat_history": rag.chat_history}
+    qa_kwargs = {"question": question, "chat_history": memory.chat_memory}
     qa_thread = Thread(target=generate, args=(rag.chain,), kwargs=qa_kwargs)
     qa_thread.start()
 

@@ -1,15 +1,26 @@
 import os
 from pathlib import Path
+from typing import Callable
 
 from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
+from codebase_indexer.api.models import Command
 from codebase_indexer.cli.argparser import Args
 from codebase_indexer.constants import (
+    COMMANDS,
     DEFAULT_OLLAMA_INFERENCE_MODEL,
     DEFAULT_VECTOR_DB_DIR,
 )
-from codebase_indexer.rag import OllamaLLMParams, RAGFactory, init_vector_store
+from codebase_indexer.rag import (
+    LLM,
+    RAG,
+    Context,
+    OllamaLLMParams,
+    RAGComponentFactory,
+    RAGFactory,
+    init_vector_store,
+)
 
 
 def cli(args: Args):
@@ -24,30 +35,68 @@ def cli(args: Args):
     db = init_vector_store(
         repo_path=repo_path, branch=branch, vector_db_dir=vector_db_dir
     )
-    rag = (
-        RAGFactory(
+
+    memory_params = OllamaLLMParams(
+        kind="memory",
+        inference_model=args.ollama_inference_model or DEFAULT_OLLAMA_INFERENCE_MODEL,
+    )
+    memory = RAGComponentFactory.create_memory(LLM(params=memory_params).model)
+    default_rag_factory: Callable[[Context | None], RAG] = (
+        lambda context: RAGFactory(
             db,
-            OllamaLLMParams(
-                kind="memory",
-                inference_model=args.ollama_inference_model
-                or DEFAULT_OLLAMA_INFERENCE_MODEL,
-            ),
-            OllamaLLMParams(
-                kind="qa",
-                inference_model=args.ollama_inference_model
-                or DEFAULT_OLLAMA_INFERENCE_MODEL,
-            ),
+            memory,
+            [
+                OllamaLLMParams(
+                    kind="qa",
+                    inference_model=args.ollama_inference_model
+                    or DEFAULT_OLLAMA_INFERENCE_MODEL,
+                ),
+            ],
         )
-        .set_callbacks("memory", [StreamingStdOutCallbackHandler()])
+        .set_context(context)
+        .set_callbacks("qa", [StreamingStdOutCallbackHandler()])
+        .build()
+    )
+
+    specialized_rag_factory: Callable[[Context | None, Command], RAG] = (
+        lambda context, command: RAGFactory.from_command(
+            db,
+            memory,
+            [
+                OllamaLLMParams(
+                    kind="qa",
+                    inference_model=args.ollama_inference_model
+                    or DEFAULT_OLLAMA_INFERENCE_MODEL,
+                ),
+            ],
+            RAGComponentFactory.from_command(command),
+        )
+        .set_context(context)
         .set_callbacks("qa", [StreamingStdOutCallbackHandler()])
         .build()
     )
 
     while True:
         question = input(">>> ")
+        current_file = input(
+            f" --- Would you like to provide a file for a more exact search?\n    > {repo_path}/"
+        )
+        context = Context(current_file=current_file) if current_file else None
+        command: Command | None = None
+        for command_iter in COMMANDS:
+            if question.startswith(f"/{command_iter}"):
+                command = command_iter
+                question = question.replace(f"/{command}", "").lstrip()
+                break
+
         try:
+            rag = (
+                specialized_rag_factory(context, command)
+                if command is not None
+                else default_rag_factory(context)
+            )
             rag.chain.invoke(
-                {"question": question, "chat_history": rag.chat_history},
+                {"question": question, "chat_history": memory.chat_memory},
             )
         except KeyboardInterrupt:
             continue

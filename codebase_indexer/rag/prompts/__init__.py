@@ -10,8 +10,12 @@ def read_prompt_template(file_path: str) -> str:
     return template
 
 
-CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT = PromptTemplate.from_template(
-    template=read_prompt_template("./conversational_retrieval_chain.txt"),
+DEFAULT_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT = PromptTemplate.from_template(
+    template=read_prompt_template("./default_conversational_retrieval_chain.txt"),
+)
+
+TEST_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT = PromptTemplate.from_template(
+    template=read_prompt_template("./test_conversational_retrieval_chain.txt"),
 )
 
 CONVERSATION_SUMMARY_MEMORY_PROMPT = PromptTemplate(
