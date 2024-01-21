@@ -5,8 +5,11 @@ from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
 from codebase_indexer.cli.argparser import Args
-from codebase_indexer.constants import DEFAULT_VECTOR_DB_DIR
-from codebase_indexer.rag import RAGBuilder, init_vector_store
+from codebase_indexer.constants import (
+    DEFAULT_OLLAMA_INFERENCE_MODEL,
+    DEFAULT_VECTOR_DB_DIR,
+)
+from codebase_indexer.rag import OllamaLLMParams, RAGFactory, init_vector_store
 
 
 def cli(args: Args):
@@ -21,8 +24,20 @@ def cli(args: Args):
     db = init_vector_store(
         repo_path=repo_path, branch=branch, vector_db_dir=vector_db_dir
     )
-    qa, chat_history = (
-        RAGBuilder(db, args.ollama_inference_model)
+    rag = (
+        RAGFactory(
+            db,
+            OllamaLLMParams(
+                kind="memory",
+                inference_model=args.ollama_inference_model
+                or DEFAULT_OLLAMA_INFERENCE_MODEL,
+            ),
+            OllamaLLMParams(
+                kind="qa",
+                inference_model=args.ollama_inference_model
+                or DEFAULT_OLLAMA_INFERENCE_MODEL,
+            ),
+        )
         .set_callbacks("memory", [StreamingStdOutCallbackHandler()])
         .set_callbacks("qa", [StreamingStdOutCallbackHandler()])
         .build()
@@ -31,8 +46,8 @@ def cli(args: Args):
     while True:
         question = input(">>> ")
         try:
-            qa.invoke(
-                {"question": question, "chat_history": chat_history},
+            rag.chain.invoke(
+                {"question": question, "chat_history": rag.chat_history},
             )
         except KeyboardInterrupt:
             continue

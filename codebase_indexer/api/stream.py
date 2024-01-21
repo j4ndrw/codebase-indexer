@@ -2,7 +2,6 @@ from typing import Any
 
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.schema import LLMResult
-from langchain_core.callbacks import AsyncCallbackManagerForChainRun
 
 
 class ChainStreamHandler(BaseCallbackHandler):

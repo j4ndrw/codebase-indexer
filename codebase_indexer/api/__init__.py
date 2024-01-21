@@ -14,8 +14,17 @@ from langchain.chains.conversational_retrieval.base import (
 from codebase_indexer.api.cache import codebase_indexers
 from codebase_indexer.api.models import Command, Meta
 from codebase_indexer.api.stream import ChainStreamHandler
-from codebase_indexer.constants import DEFAULT_VECTOR_DB_DIR
-from codebase_indexer.rag import CodebaseIndexer, Context, RAGBuilder, init_vector_store
+from codebase_indexer.constants import (
+    DEFAULT_OLLAMA_INFERENCE_MODEL,
+    DEFAULT_VECTOR_DB_DIR,
+)
+from codebase_indexer.rag import (
+    CodebaseIndexer,
+    Context,
+    OllamaLLMParams,
+    RAGFactory,
+    init_vector_store,
+)
 
 
 async def register(body: Meta):
@@ -30,7 +39,19 @@ async def register(body: Meta):
     db = init_vector_store(
         repo_path=repo_path, branch=branch, vector_db_dir=vector_db_dir
     )
-    rag_builder = RAGBuilder(db, body.ollama_inference_model)
+    rag_builder = RAGFactory(
+        db,
+        OllamaLLMParams(
+            "memory",
+            inference_model=body.ollama_inference_model
+            or DEFAULT_OLLAMA_INFERENCE_MODEL,
+        ),
+        OllamaLLMParams(
+            "qa",
+            inference_model=body.ollama_inference_model
+            or DEFAULT_OLLAMA_INFERENCE_MODEL,
+        ),
+    )
 
     codebase_indexers[repo_path.as_posix()] = CodebaseIndexer(
         repo_path=repo_path.as_posix(),
@@ -70,9 +91,8 @@ async def stream(
 
     num_llms_ran = 0
 
-    qa, chat_history = rag
-    qa_kwargs = {"question": question, "chat_history": chat_history}
-    qa_thread = Thread(target=generate, args=(qa,), kwargs=qa_kwargs)
+    qa_kwargs = {"question": question, "chat_history": rag.chat_history}
+    qa_thread = Thread(target=generate, args=(rag.chain,), kwargs=qa_kwargs)
     qa_thread.start()
 
     while True:

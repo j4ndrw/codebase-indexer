@@ -10,3 +10,4 @@ class Meta(BaseModel):
 
 
 Command = Literal["test", "explain", "search", "doc", "fix", "review"]
+LLMKind = Literal["memory", "qa"]

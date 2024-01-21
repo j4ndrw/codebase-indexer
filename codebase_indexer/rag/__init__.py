@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, astuple, dataclass, field
 from os import PathLike
-from typing import Any, Literal
+from typing import Any
 
 from gpt4all import Embed4All
 from langchain.callbacks.base import BaseCallbackHandler
@@ -15,6 +15,7 @@ from langchain_community.chat_models import ChatOllama
 from langchain_community.vectorstores.chroma import Chroma
 from langchain_core.language_models import BaseChatModel
 
+from codebase_indexer.api.models import LLMKind
 from codebase_indexer.constants import DEFAULT_OLLAMA_INFERENCE_MODEL, OLLAMA_BASE_URL
 from codebase_indexer.rag.embedding import CustomGPT4AllEmbeddings
 from codebase_indexer.rag.prompts import CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT
@@ -41,117 +42,60 @@ def init_vector_store(
     return db
 
 
-def init_llm(
-    *, callbacks: list[BaseCallbackHandler], ollama_inference_model: str | None = None
-):
-    llm = ChatOllama(
-        base_url=OLLAMA_BASE_URL,
-        model=ollama_inference_model or DEFAULT_OLLAMA_INFERENCE_MODEL,
-        callback_manager=CallbackManager(callbacks),
-        verbose=True,
-    )
+@dataclass
+class OllamaLLMParams:
+    kind: LLMKind = "qa"
+    callbacks: list[BaseCallbackHandler] = field(default_factory=list)
+    inference_model: str = DEFAULT_OLLAMA_INFERENCE_MODEL
 
-    return llm
+    def __iter__(self):
+        return iter(astuple(self))
 
 
-def init_rag(
-    *,
-    db: Chroma,
-    memory_llm: BaseChatModel,
-    qa_llm: BaseChatModel,
-    context: Context | None = None,
-):
-    retriever_kwargs: dict[str, str | dict[str, Any]] = dict(
-        search_type="mmr", search_kwargs=dict(k=5, fetch_k=1000)
-    )
+class LLM:
+    model: BaseChatModel
+    params: OllamaLLMParams
 
-    related_files = []
-    if context is not None:
-        collection = db.get()
-        metadatas = collection.get("metadatas", [])
-        for metadata in metadatas:
-            source = metadata.get("source", None)
-            if source is None:
-                continue
-            for related_file_idx, related_file in enumerate(context.related_files):
-                if related_file in source:
-                    context.related_files[related_file_idx] = source
-
-        related_files.extend(context.related_files)
-
-        if context is not None:
-            retriever_kwargs["search_kwargs"]["filter"] = {  # type: ignore
-                "source": {
-                    "$in": list(
-                        filter(None, [context.current_file, *context.related_files])
-                    )
-                }
-            }
-
-    retriever = db.as_retriever(**retriever_kwargs)
-    chat_history = ChatMessageHistory()
-    memory = ConversationSummaryMemory(
-        llm=memory_llm,
-        chat_memory=chat_history,
-        memory_key="chat_history",
-        return_messages=True,
-    )
-    qa = ConversationalRetrievalChain.from_llm(
-        llm=qa_llm,
-        retriever=retriever,
-        memory=memory,
-        get_chat_history=lambda h: h,
-        combine_docs_chain_kwargs={"prompt": CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT},
-        verbose=True,
-    )
-    return qa, chat_history
+    def __init__(self, *, params: OllamaLLMParams):
+        self.model = ChatOllama(
+            base_url=OLLAMA_BASE_URL,
+            model=params.inference_model,
+            callback_manager=CallbackManager(params.callbacks),
+            verbose=True,
+        )
+        self.params = params
 
 
-class RAGBuilder:
-    db: Chroma
-    memory_llm: BaseChatModel
-    qa_llm: BaseChatModel
-
-    ollama_inference_model: str | None = None
-
-    qa: BaseConversationalRetrievalChain
+@dataclass
+class RAG:
+    chain: BaseConversationalRetrievalChain
     chat_history: BaseChatMessageHistory
 
-    rag: tuple[BaseConversationalRetrievalChain, BaseChatMessageHistory] | None = None
 
+class RAGFactory:
+    db: Chroma
     context: Context | None
+    llms: dict[LLMKind, LLM]
 
-    def __init__(
-        self,
-        db: Chroma,
-        ollama_inference_model: str | None = None,
-    ):
+    rag: RAG
+
+    def __init__(self, db: Chroma, *llm_params_collection: OllamaLLMParams):
         self.db = db
         self.context = None
-
-        self.ollama_inference_model = ollama_inference_model
-
-        self.memory_llm = init_llm(
-            callbacks=[], ollama_inference_model=ollama_inference_model
-        )
-        self.qa_llm = init_llm(
-            callbacks=[], ollama_inference_model=ollama_inference_model
-        )
+        self.llms = {
+            llm_params.kind: LLM(params=llm_params)
+            for llm_params in llm_params_collection
+        }
 
     def set_callbacks(
         self,
-        llm_type: Literal["memory"] | Literal["qa"],
+        llm_kind: LLMKind,
         callbacks: list[BaseCallbackHandler],
     ):
-        if llm_type == "memory":
-            self.memory_llm = init_llm(
-                callbacks=callbacks, ollama_inference_model=self.ollama_inference_model
-            )
-
-        if llm_type == "qa":
-            self.qa_llm = init_llm(
-                callbacks=callbacks, ollama_inference_model=self.ollama_inference_model
-            )
+        llm = self.llms[llm_kind]
+        params_kwargs = asdict(llm.params)
+        params_kwargs["callbacks"] = callbacks
+        self.llms[llm_kind] = LLM(params=OllamaLLMParams(**params_kwargs))
 
         return self
 
@@ -160,12 +104,58 @@ class RAGBuilder:
         return self
 
     def build(self):
-        return init_rag(
-            db=self.db,
-            memory_llm=self.memory_llm,
-            qa_llm=self.qa_llm,
-            context=self.context,
+        retriever_kwargs: dict[str, str | dict[str, Any]] = dict(
+            search_type="mmr", search_kwargs=dict(k=5, fetch_k=1000)
         )
+
+        related_files = []
+        if self.context is not None:
+            collection = self.db.get()
+            metadatas = collection.get("metadatas", [])
+            for metadata in metadatas:
+                source = metadata.get("source", None)
+                if source is None:
+                    continue
+                for related_file_idx, related_file in enumerate(
+                    self.context.related_files
+                ):
+                    if related_file in source:
+                        self.context.related_files[related_file_idx] = source
+
+            related_files.extend(self.context.related_files)
+
+            if self.context is not None:
+                retriever_kwargs["search_kwargs"]["filter"] = {  # type: ignore
+                    "source": {
+                        "$in": list(
+                            filter(
+                                None,
+                                [
+                                    self.context.current_file,
+                                    *self.context.related_files,
+                                ],
+                            )
+                        )
+                    }
+                }
+
+        retriever = self.db.as_retriever(**retriever_kwargs)
+        chat_history = ChatMessageHistory()
+        memory = ConversationSummaryMemory(
+            llm=self.llms["memory"].model,
+            chat_memory=chat_history,
+            memory_key="chat_history",
+            return_messages=True,
+        )
+        qa = ConversationalRetrievalChain.from_llm(
+            llm=self.llms["qa"].model,
+            retriever=retriever,
+            memory=memory,
+            get_chat_history=lambda h: h,
+            combine_docs_chain_kwargs={"prompt": CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT},
+            verbose=True,
+        )
+        return RAG(chain=qa, chat_history=chat_history)
 
 
 @dataclass()
@@ -175,4 +165,4 @@ class CodebaseIndexer:
     vector_db_dir: str | None
     ollama_inference_model: str | None
     db: Chroma
-    rag_builder: RAGBuilder
+    rag_builder: RAGFactory
