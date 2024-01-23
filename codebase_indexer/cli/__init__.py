@@ -30,10 +30,10 @@ def cli(args: Args):
         raise Exception("A repository must be specified")
 
     repo = Repo(repo_path)
-    branch = repo.active_branch.name
+    commit = repo.head.commit.hexsha
 
     db = init_vector_store(
-        repo_path=repo_path, branch=branch, vector_db_dir=vector_db_dir
+        repo_path=repo_path, commit=commit, vector_db_dir=vector_db_dir
     )
 
     memory_params = OllamaLLMParams(

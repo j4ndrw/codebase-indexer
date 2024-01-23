@@ -37,10 +37,13 @@ async def register(body: Meta):
         raise Exception("A repository must be specified")
 
     repo = Repo(repo_path)
-    branch = repo.active_branch.name
+    commit = repo.head.commit.hexsha
+    key = repo_path.as_posix() + commit
+    if key in codebase_indexers:
+        return Response(None, 200)
 
     db = init_vector_store(
-        repo_path=repo_path, branch=branch, vector_db_dir=vector_db_dir
+        repo_path=repo_path, commit=commit, vector_db_dir=vector_db_dir
     )
     memory_params = OllamaLLMParams(
         kind="memory",
@@ -81,9 +84,9 @@ async def register(body: Meta):
         context
     )
 
-    codebase_indexers[repo_path.as_posix()] = CodebaseIndexer(
+    codebase_indexers[key] = CodebaseIndexer(
         repo_path=repo_path.as_posix(),
-        branch=branch,
+        commit=commit,
         vector_db_dir=vector_db_dir,
         ollama_inference_model=body.ollama_inference_model,
         memory=memory,

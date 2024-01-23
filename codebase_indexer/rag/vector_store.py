@@ -12,14 +12,14 @@ from langchain_core.embeddings import Embeddings
 from codebase_indexer.constants import LANGUAGE_FILE_EXTS, LANGUAGES
 
 
-def collection_name(repo_path: str) -> str:
+def collection_name(repo_path: str, commit: str) -> str:
     try:
-        return repo_path.split("/")[-1]
+        return repo_path.split("/")[-1] + commit[:7]
     except IndexError:
-        return repo_path.replace("/", "-").replace("~", "")[1:]
+        return repo_path.replace("/", "-").replace("~", "")[1:] + commit[:7]
 
 
-def load_docs(repo_path: PathLike[str], branch: str) -> list[Document]:
+def load_docs(repo_path: PathLike[str], commit: str) -> list[Document]:
     def file_filter(file_path: str) -> bool:
         is_meta = file_path.lower().endswith(
             (
@@ -48,7 +48,7 @@ def load_docs(repo_path: PathLike[str], branch: str) -> list[Document]:
         for language in LANGUAGES
     }
 
-    loader = GitLoader(repo_path=str(repo_path), branch=branch, file_filter=file_filter)
+    loader = GitLoader(repo_path=str(repo_path), branch=commit, file_filter=file_filter)
     docs = loader.load()
 
     for language in LANGUAGES:
@@ -65,16 +65,16 @@ def load_docs(repo_path: PathLike[str], branch: str) -> list[Document]:
 
 def create_index(
     repo_path: PathLike,
-    branch: str,
+    commit: str,
     vector_db_dir: str,
     embeddings_factory: Callable[[], Embeddings],
 ) -> tuple[PathLike[str], Chroma]:
-    docs = load_docs(repo_path, branch)
+    docs = load_docs(repo_path, commit)
     db = Chroma.from_documents(
         docs,
         embeddings_factory(),
-        persist_directory=Path(os.path.join(vector_db_dir, branch)).as_posix(),
-        collection_name=collection_name(str(repo_path)),
+        persist_directory=Path(os.path.join(vector_db_dir, commit)).as_posix(),
+        collection_name=collection_name(str(repo_path), commit),
     )
     print("Indexed documents")
     return repo_path, db
@@ -82,14 +82,14 @@ def create_index(
 
 def load_index(
     repo_path: PathLike[str],
-    branch: str,
+    commit: str,
     vector_db_dir: str,
     embeddings_factory: Callable[[], Embeddings],
 ) -> tuple[PathLike[str], Chroma] | None:
     store = Chroma(
-        collection_name(str(repo_path)),
+        collection_name(str(repo_path), commit),
         embeddings_factory(),
-        persist_directory=Path(os.path.join(vector_db_dir, branch)).as_posix(),
+        persist_directory=Path(os.path.join(vector_db_dir, commit)).as_posix(),
     )
     result = store.get()
     if len(result["documents"]) == 0:

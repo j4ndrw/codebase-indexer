@@ -2,6 +2,7 @@ from dataclasses import asdict, astuple, dataclass, field
 from os import PathLike
 from typing import Any, Callable
 
+from git import Repo
 from gpt4all import Embed4All
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.manager import CallbackManager
@@ -35,12 +36,12 @@ class Context:
 def init_vector_store(
     *,
     repo_path: PathLike,
-    branch: str,
+    commit: str,
     vector_db_dir: str,
 ) -> Chroma:
     embeddings_factory = lambda: CustomGPT4AllEmbeddings(client=Embed4All)
 
-    indexing_args = (repo_path, branch, vector_db_dir, embeddings_factory)
+    indexing_args = (repo_path, commit, vector_db_dir, embeddings_factory)
     repo_path, db = load_index(*indexing_args) or create_index(*indexing_args)
 
     return db
@@ -268,7 +269,7 @@ class RAGFactory:
 @dataclass()
 class CodebaseIndexer:
     repo_path: str
-    branch: str
+    commit: str
     vector_db_dir: str | None
     ollama_inference_model: str | None
     db: Chroma
