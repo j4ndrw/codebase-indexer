@@ -180,9 +180,27 @@ class RAGComponentFactory:
         return RAG(chain=qa)
 
     @staticmethod
+    def review_qa_chain_builder(
+        db: Chroma,
+        context: Context | None,
+        memory: ConversationSummaryMemory,
+        llms: dict[LLMKind, LLM],
+    ):
+        retriever = RAGComponentFactory.create_default_retriever(db, context)
+        qa = RAGComponentFactory.create_qa_chain(
+            llms["qa"].model,
+            memory,
+            retriever,
+            TEST_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
+        )
+        return RAG(chain=qa)
+
+    @staticmethod
     def from_command(command: Command) -> RAGComponentFactoryType:
         if command == "test":
             return RAGComponentFactory.test_qa_chain_builder
+        if command == "review":
+            return RAGComponentFactory.review_qa_chain_builder
         # TODO(j4ndrw): Need to implement the rest of the commands
         return RAGComponentFactory.default_qa_chain_builder
 
