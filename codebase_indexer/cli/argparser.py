@@ -18,6 +18,12 @@ def create_argparser() -> ArgumentParser:
         default="",
     )
     cli_parser.add_argument(
+        "--sub_folder",
+        type=str,
+        help="Specify a subfolder you want to load documents from. Defaults to None",
+        default=None,
+    )
+    cli_parser.add_argument(
         "--ollama_inference_model",
         type=str,
         help="The LLM you want to use. Defaults to `mistral-openorca`.",
@@ -35,6 +41,7 @@ def create_argparser() -> ArgumentParser:
 @dataclass
 class Args:
     repo_path: str
+    sub_folder: str | None
     ollama_inference_model: str
     vector_db_dir: str | None
 
@@ -46,11 +53,13 @@ def parse_args() -> Args | None:
         return None
 
     repo_path = args.repo_path
+    sub_folder = args.sub_folder
     ollama_inference_model = args.ollama_inference_model
     vector_db_dir = args.vector_db_dir
 
     return Args(
         repo_path=repo_path,
+        sub_folder=sub_folder,
         ollama_inference_model=ollama_inference_model,
         vector_db_dir=vector_db_dir,
     )

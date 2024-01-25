@@ -7,7 +7,7 @@ from codebase_indexer.api.models import Command
 OLLAMA_BASE_URL = "http://" + os.environ["OLLAMA_HOST"]
 DEFAULT_VECTOR_DB_DIR = ".llm-index/vectorstores/db"
 
-DEFAULT_OLLAMA_INFERENCE_MODEL = "mistral-openorca"
+DEFAULT_OLLAMA_INFERENCE_MODEL = "stablelm-zephyr"
 
 COMMANDS: list[Command] = ["test", "explain", "search", "doc", "fix", "review"]
 
