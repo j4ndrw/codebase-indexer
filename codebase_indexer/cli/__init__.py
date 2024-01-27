@@ -43,11 +43,11 @@ def cli(args: Args):
     )
 
     llm = create_llm(
-        params=OllamaLLMParams(
-            inference_model=args.ollama_inference_model
+        params={
+            "inference_model": args.ollama_inference_model
             or DEFAULT_OLLAMA_INFERENCE_MODEL,
-            callbacks=[StreamingStdOutCallbackHandler()],
-        )
+            "callbacks": [StreamingStdOutCallbackHandler()],
+        }
     )
     memory = create_memory(llm)
     while True:

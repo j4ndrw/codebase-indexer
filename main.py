@@ -13,10 +13,17 @@ from codebase_indexer.api.cache import codebase_indexers
 from codebase_indexer.api.models import Command, Meta
 from codebase_indexer.cli import cli
 from codebase_indexer.cli.argparser import parse_args
-from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
-                                        DEFAULT_VECTOR_DB_DIR)
-from codebase_indexer.rag import (CodebaseIndexer, OllamaLLMParams, create_llm,
-                                  create_memory, init_vector_store)
+from codebase_indexer.constants import (
+    DEFAULT_OLLAMA_INFERENCE_MODEL,
+    DEFAULT_VECTOR_DB_DIR,
+)
+from codebase_indexer.rag import (
+    CodebaseIndexer,
+    OllamaLLMParams,
+    create_llm,
+    create_memory,
+    init_vector_store,
+)
 
 app = FastAPI()
 
@@ -52,10 +59,11 @@ async def register(body: Meta):
         vector_db_dir=vector_db_dir,
     )
     llm = create_llm(
-        params=OllamaLLMParams(
-            inference_model=body.ollama_inference_model
+        params={
+            "callbacks": [],
+            "inference_model": body.ollama_inference_model
             or DEFAULT_OLLAMA_INFERENCE_MODEL,
-        )
+        }
     )
     memory = create_memory(llm)
 

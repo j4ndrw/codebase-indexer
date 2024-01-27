@@ -1,6 +1,6 @@
 from dataclasses import astuple, dataclass, field
 from os import PathLike
-from typing import Any
+from typing import Any, TypedDict
 
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.manager import CallbackManager
@@ -57,20 +57,16 @@ def init_vector_store(
     return db
 
 
-@dataclass
-class OllamaLLMParams:
-    callbacks: list[BaseCallbackHandler] = field(default_factory=list)
-    inference_model: str = DEFAULT_OLLAMA_INFERENCE_MODEL
-
-    def __iter__(self):
-        return iter(astuple(self))
+class OllamaLLMParams(TypedDict):
+    callbacks: list[BaseCallbackHandler]
+    inference_model: str
 
 
 def create_llm(*, params: OllamaLLMParams) -> ChatOllama:
     return ChatOllama(
         base_url=OLLAMA_BASE_URL,
-        model=params.inference_model,
-        callback_manager=CallbackManager(params.callbacks),
+        model=params["inference_model"] or DEFAULT_OLLAMA_INFERENCE_MODEL,
+        callback_manager=CallbackManager(params["callbacks"] or []),
         verbose=True,
     )
 
