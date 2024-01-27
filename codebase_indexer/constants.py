@@ -1,17 +1,20 @@
 import os
+import re
+from re import Pattern
 
 from langchain.text_splitter import Language
 
-from codebase_indexer.api.models import Command
+from codebase_indexer.api.models import Command, Context
 
 OLLAMA_BASE_URL = "http://" + os.environ["OLLAMA_HOST"]
 DEFAULT_VECTOR_DB_DIR = os.path.join(
     os.path.expanduser("~"), ".codebase-indexer/vectorstores/db"
 )
 
-DEFAULT_OLLAMA_INFERENCE_MODEL = "stablelm-zephyr"
+DEFAULT_OLLAMA_INFERENCE_MODEL = "mistral-openorca"
 
 COMMANDS: list[Command] = ["test", "search", "review"]
+CONTEXTS: list[Context] = ["from"]
 
 LANGUAGES = [
     Language.CPP,

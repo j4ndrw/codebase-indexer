@@ -4,16 +4,16 @@ from pathlib import Path
 from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
-from codebase_indexer.api.models import Command
+from codebase_indexer.api.models import Command, Context
 from codebase_indexer.cli.argparser import Args
 from codebase_indexer.constants import (
     COMMANDS,
+    CONTEXTS,
     DEFAULT_OLLAMA_INFERENCE_MODEL,
     DEFAULT_VECTOR_DB_DIR,
 )
 from codebase_indexer.rag import (
     RAG,
-    OllamaLLMParams,
     create_llm,
     create_memory,
     create_retriever,
@@ -53,18 +53,32 @@ def cli(args: Args):
     while True:
         question = input(">>> ")
         command: Command | None = None
+        contexts: dict[Context, list[str]] = {}
         for command_iter in COMMANDS:
             if question.startswith(f"/{command_iter}"):
                 command = command_iter
-                question = question.replace(f"/{command}", "").lstrip()
+                question = question.replace(f"/{command}", "").strip()
                 break
+
+        # Very ugly, but I can't be asked to implement a proper DSL...
+        for context in CONTEXTS:
+            if question.startswith(f"@{context}"):
+                question = question.replace(f"@{context}", "").strip()
+                argument, question = question.split(" ", 1)
+                question = question.strip()
+                contexts.update({context: [*contexts.get(context, []), argument]})
 
         system_prompt, qa_chain_factory, custom_retriever_factory = RAG.from_command(
             command
         )
-        retriever = create_retriever(db)
 
         try:
+            retriever = create_retriever(db)
+            if len(contexts.get("from", [])) > 0:
+                print(contexts["from"])
+                retriever.search_kwargs.update(
+                    dict(filter={"source": {"$in": contexts["from"]}})
+                )
             if command == "search":
                 if custom_retriever_factory is not None and db.embeddings is not None:
                     retriever.search_kwargs.update(dict(k=20))
@@ -73,13 +87,9 @@ def cli(args: Args):
                         question, callbacks=llm.callbacks
                     )
 
-                    memory.chat_memory.add_user_message(question)
                     sources = [doc.metadata["source"] for doc in docs]
                     for source in sources:
                         print(f"\t- {source}")
-                    memory.chat_memory.add_ai_message(
-                        "\n".join([doc.page_content for doc in docs])
-                    )
 
             else:
                 qa = qa_chain_factory(llm, retriever, memory, system_prompt)
