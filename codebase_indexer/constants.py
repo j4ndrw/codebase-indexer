@@ -5,11 +5,13 @@ from langchain.text_splitter import Language
 from codebase_indexer.api.models import Command
 
 OLLAMA_BASE_URL = "http://" + os.environ["OLLAMA_HOST"]
-DEFAULT_VECTOR_DB_DIR = ".llm-index/vectorstores/db"
+DEFAULT_VECTOR_DB_DIR = os.path.join(
+    os.path.expanduser("~"), ".codebase-indexer/vectorstores/db"
+)
 
 DEFAULT_OLLAMA_INFERENCE_MODEL = "stablelm-zephyr"
 
-COMMANDS: list[Command] = ["test", "explain", "search", "doc", "fix", "review"]
+COMMANDS: list[Command] = ["test", "search", "review"]
 
 LANGUAGES = [
     Language.CPP,

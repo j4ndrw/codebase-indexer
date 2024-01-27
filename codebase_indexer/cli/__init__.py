@@ -6,18 +6,27 @@ from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
 from codebase_indexer.api.models import Command
 from codebase_indexer.cli.argparser import Args
-from codebase_indexer.constants import (COMMANDS,
-                                        DEFAULT_OLLAMA_INFERENCE_MODEL,
-                                        DEFAULT_VECTOR_DB_DIR)
-from codebase_indexer.rag import (RAG, OllamaLLMParams, create_llm,
-                                  create_memory, create_retriever,
-                                  init_vector_store)
+from codebase_indexer.constants import (
+    COMMANDS,
+    DEFAULT_OLLAMA_INFERENCE_MODEL,
+    DEFAULT_VECTOR_DB_DIR,
+)
+from codebase_indexer.rag import (
+    RAG,
+    OllamaLLMParams,
+    create_llm,
+    create_memory,
+    create_retriever,
+    init_vector_store,
+)
 
 
 def cli(args: Args):
     repo_path = Path(os.path.join(os.path.curdir, args.repo_path)).resolve()
     sub_folder = args.sub_folder
-    vector_db_dir = args.vector_db_dir or os.path.join(repo_path, DEFAULT_VECTOR_DB_DIR)
+    vector_db_dir = args.vector_db_dir or os.path.join(
+        DEFAULT_VECTOR_DB_DIR, repo_path.as_posix().rsplit("/")[-1]
+    )
     if not repo_path:
         raise Exception("A repository must be specified")
 
@@ -65,7 +74,7 @@ def cli(args: Args):
                     )
 
                     memory.chat_memory.add_user_message(question)
-                    sources = [doc.metadata['source'] for doc in docs]
+                    sources = [doc.metadata["source"] for doc in docs]
                     for source in sources:
                         print(f"\t- {source}")
                     memory.chat_memory.add_ai_message(

@@ -13,17 +13,10 @@ from codebase_indexer.api.cache import codebase_indexers
 from codebase_indexer.api.models import Command, Meta
 from codebase_indexer.cli import cli
 from codebase_indexer.cli.argparser import parse_args
-from codebase_indexer.constants import (
-    DEFAULT_OLLAMA_INFERENCE_MODEL,
-    DEFAULT_VECTOR_DB_DIR,
-)
-from codebase_indexer.rag import (
-    CodebaseIndexer,
-    OllamaLLMParams,
-    create_llm,
-    create_memory,
-    init_vector_store,
-)
+from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
+                                        DEFAULT_VECTOR_DB_DIR)
+from codebase_indexer.rag import (CodebaseIndexer, OllamaLLMParams, create_llm,
+                                  create_memory, init_vector_store)
 
 app = FastAPI()
 
@@ -40,7 +33,9 @@ app.add_middleware(
 async def register(body: Meta):
     repo_path = Path(body.repo_path).resolve()
     sub_folder = body.sub_folder
-    vector_db_dir = body.vector_db_dir or os.path.join(repo_path, DEFAULT_VECTOR_DB_DIR)
+    vector_db_dir = body.vector_db_dir or os.path.join(
+        DEFAULT_VECTOR_DB_DIR, repo_path.as_posix().rsplit("/")[-1]
+    )
     if not repo_path:
         raise Exception("A repository must be specified")
 
