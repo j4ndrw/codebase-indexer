@@ -1,6 +1,4 @@
 import os
-import re
-from re import Pattern
 
 from langchain.text_splitter import Language
 
@@ -14,7 +12,7 @@ DEFAULT_VECTOR_DB_DIR = os.path.join(
 DEFAULT_OLLAMA_INFERENCE_MODEL = "mistral-openorca"
 
 COMMANDS: list[Command] = ["test", "search", "review"]
-CONTEXTS: list[Context] = ["from"]
+CONTEXTS: list[Context] = ["from", "infer"]
 
 LANGUAGES = [
     Language.CPP,

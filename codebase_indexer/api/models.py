@@ -11,4 +11,4 @@ class Meta(BaseModel):
 
 
 Command = Literal["test", "search", "review"]
-Context = Literal["from"]
+Context = Literal["from", "infer"]

@@ -50,6 +50,7 @@ def cli(args: Args):
         }
     )
     memory = create_memory(llm)
+    prev_search: list[str] = []
     while True:
         question = input(">>> ")
         command: Command | None = None
@@ -63,10 +64,17 @@ def cli(args: Args):
         # Very ugly, but I can't be asked to implement a proper DSL...
         for context in CONTEXTS:
             if question.startswith(f"@{context}"):
-                question = question.replace(f"@{context}", "").strip()
-                argument, question = question.split(" ", 1)
+                question = question.replace(f"@{context}", "")
+                argument = None
+                if context == "from":
+                    argument, question = question.split(" ", 1)
+                    argument = [*contexts.get(context, []), argument]
+                elif context == "infer":
+                    argument = prev_search
+
+                if argument is not None:
+                    contexts.update({context: argument})
                 question = question.strip()
-                contexts.update({context: [*contexts.get(context, []), argument]})
 
         system_prompt, qa_chain_factory, custom_retriever_factory = RAG.from_command(
             command
@@ -74,11 +82,12 @@ def cli(args: Args):
 
         try:
             retriever = create_retriever(db)
-            if len(contexts.get("from", [])) > 0:
-                print(contexts["from"])
+            sources = contexts.get("from", []) + contexts.get("infer", [])
+            if len(sources) > 0:
                 retriever.search_kwargs.update(
-                    dict(filter={"source": {"$in": contexts["from"]}})
+                    dict(filter={"source": {"$in": sources}})
                 )
+            prev_search = []
             if command == "search":
                 if custom_retriever_factory is not None and db.embeddings is not None:
                     retriever.search_kwargs.update(dict(k=20))
@@ -90,7 +99,7 @@ def cli(args: Args):
                     sources = [doc.metadata["source"] for doc in docs]
                     for source in sources:
                         print(f"\t- {source}")
-
+                    prev_search.extend(sources)
             else:
                 qa = qa_chain_factory(llm, retriever, memory, system_prompt)
                 qa.invoke(
