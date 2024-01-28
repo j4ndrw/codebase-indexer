@@ -1,0 +1,5 @@
+If the following question is not related to searching for code in a particular place, keep the question as is. Otherwise, rephrase the question so that it doesn't ask about searching for code or files in a particular place.
+
+Initial question: {question}
+Rephrased question:
+

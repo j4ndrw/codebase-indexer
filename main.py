@@ -19,7 +19,6 @@ from codebase_indexer.constants import (
 )
 from codebase_indexer.rag import (
     CodebaseIndexer,
-    OllamaLLMParams,
     create_llm,
     create_memory,
     init_vector_store,

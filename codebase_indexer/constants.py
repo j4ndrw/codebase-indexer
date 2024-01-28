@@ -2,17 +2,16 @@ import os
 
 from langchain.text_splitter import Language
 
-from codebase_indexer.api.models import Command, Context
+from codebase_indexer.api.models import Command
 
 OLLAMA_BASE_URL = "http://" + os.environ["OLLAMA_HOST"]
 DEFAULT_VECTOR_DB_DIR = os.path.join(
     os.path.expanduser("~"), ".codebase-indexer/vectorstores/db"
 )
 
-DEFAULT_OLLAMA_INFERENCE_MODEL = "mistral-openorca"
+DEFAULT_OLLAMA_INFERENCE_MODEL = "mistral-openorca:7b"
 
-COMMANDS: list[Command] = ["test", "search", "review"]
-CONTEXTS: list[Context] = ["from", "infer"]
+COMMANDS: list[Command] = ["test", "search", "review", "new_conversation"]
 
 LANGUAGES = [
     Language.CPP,
@@ -59,3 +58,5 @@ LANGUAGE_FILE_EXTS = {
     Language.CSHARP: ["cs", "cshtml"],
     Language.COBOL: ["cbl"],
 }
+
+MAX_SOURCES_WINDOW = 10

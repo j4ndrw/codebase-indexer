@@ -10,5 +10,4 @@ class Meta(BaseModel):
     ollama_inference_model: str | None = None
 
 
-Command = Literal["test", "search", "review"]
-Context = Literal["from", "infer"]
+Command = Literal["test", "search", "review", "new_conversation"]

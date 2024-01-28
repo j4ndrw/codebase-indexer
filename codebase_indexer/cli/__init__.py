@@ -4,21 +4,14 @@ from pathlib import Path
 from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
-from codebase_indexer.api.models import Command, Context
 from codebase_indexer.cli.argparser import Args
-from codebase_indexer.constants import (
-    COMMANDS,
-    CONTEXTS,
-    DEFAULT_OLLAMA_INFERENCE_MODEL,
-    DEFAULT_VECTOR_DB_DIR,
-)
-from codebase_indexer.rag import (
-    RAG,
-    create_llm,
-    create_memory,
-    create_retriever,
-    init_vector_store,
-)
+from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
+                                        DEFAULT_VECTOR_DB_DIR)
+from codebase_indexer.rag import (RAG, create_llm, create_memory,
+                                  create_retriever, init_vector_store)
+from codebase_indexer.rag.agents import create_tools
+from codebase_indexer.rag.chains import create_search_request_removal_chain
+from codebase_indexer.utils import strip_generated_text
 
 
 def cli(args: Args):
@@ -50,65 +43,51 @@ def cli(args: Args):
         }
     )
     memory = create_memory(llm)
-    prev_search: list[str] = []
+    sources: list[str] = []
     while True:
         question = input(">>> ")
-        command: Command | None = None
-        contexts: dict[Context, list[str]] = {}
-        for command_iter in COMMANDS:
-            if question.startswith(f"/{command_iter}"):
-                command = command_iter
-                question = question.replace(f"/{command}", "").strip()
-                break
 
-        # Very ugly, but I can't be asked to implement a proper DSL...
-        for context in CONTEXTS:
-            if question.startswith(f"@{context}"):
-                question = question.replace(f"@{context}", "")
-                argument = None
-                if context == "from":
-                    argument, question = question.split(" ", 1)
-                    argument = [*contexts.get(context, []), argument]
-                elif context == "infer":
-                    argument = prev_search
+        commands = RAG.extract_commands(llm, question)
+        sources = RAG.extract_sources_to_search_in(llm, question, sources)
 
-                if argument is not None:
-                    contexts.update({context: argument})
-                question = question.strip()
+        for command in commands:
+            if command == "new_conversation":
+                sources = []
+                continue
 
-        system_prompt, qa_chain_factory, custom_retriever_factory = RAG.from_command(
-            command
-        )
+            system_prompt, qa_chain_factory, custom_retriever_factory = (
+                RAG.from_command(command)
+            )
 
-        try:
-            retriever = create_retriever(db)
-            sources = contexts.get("from", []) + contexts.get("infer", [])
-            if len(sources) > 0:
-                retriever.search_kwargs.update(
-                    dict(filter={"source": {"$in": sources}})
-                )
-            prev_search = []
-            if command == "search":
-                if custom_retriever_factory is not None and db.embeddings is not None:
-                    retriever.search_kwargs.update(dict(k=20))
-                    retriever = custom_retriever_factory(db.embeddings, retriever)
-                    docs = retriever.get_relevant_documents(
-                        question, callbacks=llm.callbacks
+            try:
+                retriever = create_retriever(db)
+                if command == "search":
+                    if (
+                        custom_retriever_factory is not None
+                        and db.embeddings is not None
+                    ):
+                        embeddings_retriever = custom_retriever_factory(
+                            db.embeddings, retriever
+                        )
+                        sources = RAG.search(embeddings_retriever, question)
+                        for source in sources:
+                            print(f"\t- {source}")
+
+                        sources.extend(sources)
+                        question = RAG.remove_search_request(llm, question)
+
+                else:
+                    retriever = RAG.filter_on_sources(retriever, sources)
+                    qa = qa_chain_factory(llm, retriever, memory, system_prompt)
+                    qa.invoke(
+                        {
+                            "question": question,
+                            "chat_history": memory.chat_memory,
+                        },
                     )
+            except KeyboardInterrupt:
+                continue
+            finally:
+                print("\n")
 
-                    sources = [doc.metadata["source"] for doc in docs]
-                    for source in sources:
-                        print(f"\t- {source}")
-                    prev_search.extend(sources)
-            else:
-                qa = qa_chain_factory(llm, retriever, memory, system_prompt)
-                qa.invoke(
-                    {
-                        "question": question,
-                        "chat_history": memory.chat_memory,
-                    },
-                )
-        except KeyboardInterrupt:
-            continue
-        finally:
-            print("\n")
+        RAG.cycle_sources_buffer(sources)

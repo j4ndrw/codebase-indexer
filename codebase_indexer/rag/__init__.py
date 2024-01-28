@@ -1,4 +1,4 @@
-from dataclasses import astuple, dataclass, field
+from dataclasses import dataclass
 from os import PathLike
 from typing import Any, TypedDict
 
@@ -10,9 +10,7 @@ from langchain.memory.chat_memory import BaseChatMemory
 from langchain.prompts import PromptTemplate
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import (
-    DocumentCompressorPipeline,
-    EmbeddingsFilter,
-)
+    DocumentCompressorPipeline, EmbeddingsFilter)
 from langchain.schema import BaseRetriever
 from langchain_community.chat_models import ChatOllama
 from langchain_community.document_transformers import EmbeddingsRedundantFilter
@@ -21,13 +19,16 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 
 from codebase_indexer.api.models import Command
-from codebase_indexer.constants import DEFAULT_OLLAMA_INFERENCE_MODEL, OLLAMA_BASE_URL
+from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
+                                        MAX_SOURCES_WINDOW, OLLAMA_BASE_URL)
+from codebase_indexer.rag.agents import create_tools
+from codebase_indexer.rag.chains import create_search_request_removal_chain
 from codebase_indexer.rag.prompts import (
     DEFAULT_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
     REVIEW_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
-    TEST_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
-)
+    TEST_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT)
 from codebase_indexer.rag.vector_store import create_index, load_index
+from codebase_indexer.utils import strip_generated_text
 
 
 def init_vector_store(
@@ -73,7 +74,7 @@ def create_llm(*, params: OllamaLLMParams) -> ChatOllama:
 
 def create_retriever(db: VectorStore):
     retriever_kwargs: dict[str, str | dict[str, Any]] = dict(
-        search_type="mmr", search_kwargs=dict(k=5, fetch_k=1000)
+        search_type="mmr", search_kwargs=dict(k=8, fetch_k=1000)
     )
     return db.as_retriever(**retriever_kwargs)
 
@@ -109,6 +110,8 @@ def create_conversational_retrieval_chain(
 def create_contextual_retriever(
     embeddings: Embeddings, retriever: VectorStoreRetriever
 ):
+    initial_args = dict(**retriever.search_kwargs)
+    retriever.search_kwargs.update(dict(k=20))
     redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
     relevant_filter = EmbeddingsFilter(embeddings=embeddings, similarity_threshold=0.8)
     pipeline_compressor = DocumentCompressorPipeline(
@@ -117,6 +120,7 @@ def create_contextual_retriever(
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=pipeline_compressor, base_retriever=retriever
     )
+    retriever.search_kwargs = initial_args
     return compression_retriever
 
 
@@ -124,6 +128,79 @@ class RAG:
     @staticmethod
     def create():
         return None, create_conversational_retrieval_chain, None
+
+    @staticmethod
+    def extract_commands(llm: ChatOllama, question: str) -> list[Command]:
+        command_extraction_tool, _ = create_tools(llm)
+
+        extracted_commands = [
+            *filter(
+                lambda x: x.lower() != "n/a",  # type: ignore
+                map(
+                    lambda x: x.strip(),
+                    (
+                        strip_generated_text(
+                            command_extraction_tool.invoke({"question": question}).get(
+                                "text", ""
+                            )
+                        )
+                        or ""
+                    ).split(", "),
+                ),
+            )
+        ]
+        if "search" in extracted_commands:
+            extracted_commands.remove("search")
+            return ["search", *extracted_commands]  # type: ignore
+        return extracted_commands  # type: ignore
+
+    @staticmethod
+    def extract_sources_to_search_in(
+        llm: ChatOllama, question: str, sources: list[str] | None = None
+    ) -> list[str]:
+        _, file_path_extraction_tool = create_tools(llm)
+        sources = sources or []
+
+        file_paths = strip_generated_text(
+            file_path_extraction_tool.invoke({"question": question}).get("text", "")
+        )
+        if file_paths.lower() != "n/a":
+            sources.extend([*map(lambda x: x.strip(), file_paths.split(","))])
+
+        return sources
+
+    @staticmethod
+    def filter_on_sources(
+        retriever: VectorStoreRetriever, sources: list[str]
+    ) -> VectorStoreRetriever:
+        if len(sources) > 0:
+            retriever.search_kwargs.update(dict(filter={"source": {"$in": sources}}))
+        return retriever
+
+    @staticmethod
+    def cycle_sources_buffer(sources: list[str]) -> list[str]:
+        if len(sources) <= MAX_SOURCES_WINDOW:
+            return sources
+        return sources[len(sources) - MAX_SOURCES_WINDOW : MAX_SOURCES_WINDOW]
+
+    @staticmethod
+    def search(retriever: ContextualCompressionRetriever, question: str) -> list[str]:
+        docs = retriever.get_relevant_documents(question)
+
+        sources = [doc.metadata["source"] for doc in docs]
+        return sources
+
+    @staticmethod
+    def remove_search_request(llm: ChatOllama, question: str) -> str:
+        question = (
+            strip_generated_text(
+                create_search_request_removal_chain(llm)
+                .invoke({"question": question})
+                .get("text", question)
+            )
+            or question
+        )
+        return question
 
     @classmethod
     def from_command(cls, command: Command | None):

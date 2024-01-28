@@ -1,0 +1,5 @@
+Rephrase the following question such that it is more clear, more detailed and with no typography errors. Always assume you know the context and that the context is related to code or programming.
+
+Initial question: {question}
+Rephrased question:
+

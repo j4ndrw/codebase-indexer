@@ -26,3 +26,12 @@ CONVERSATION_SUMMARY_MEMORY_PROMPT = PromptTemplate(
     input_variables=["summary", "new_lines"],
     template=read_prompt_template("./conversation_summary_memory.txt"),
 )
+
+QUERY_EXPANSION_PROMPT = PromptTemplate(
+    input_variables=["question"], template=read_prompt_template("./query_expansion.txt")
+)
+
+SEARCH_REQUEST_REMOVAL = PromptTemplate(
+    input_variables=["question"],
+    template=read_prompt_template("./search_request_removal.txt"),
+)
