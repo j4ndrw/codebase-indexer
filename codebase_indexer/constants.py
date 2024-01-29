@@ -11,7 +11,13 @@ DEFAULT_VECTOR_DB_DIR = os.path.join(
 
 DEFAULT_OLLAMA_INFERENCE_MODEL = "mistral-openorca:7b"
 
-COMMANDS: list[Command] = ["test", "search", "review", "new_conversation"]
+COMMANDS: list[Command] = [
+    "test",
+    "search",
+    "review",
+    "new_conversation",
+    "general_chat",
+]
 
 LANGUAGES = [
     Language.CPP,

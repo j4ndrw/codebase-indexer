@@ -5,13 +5,17 @@ from git import Repo
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 
 from codebase_indexer.cli.argparser import Args
-from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
-                                        DEFAULT_VECTOR_DB_DIR)
-from codebase_indexer.rag import (RAG, create_llm, create_memory,
-                                  create_retriever, init_vector_store)
-from codebase_indexer.rag.agents import create_tools
-from codebase_indexer.rag.chains import create_search_request_removal_chain
-from codebase_indexer.utils import strip_generated_text
+from codebase_indexer.constants import (
+    DEFAULT_OLLAMA_INFERENCE_MODEL,
+    DEFAULT_VECTOR_DB_DIR,
+)
+from codebase_indexer.rag import (
+    RAG,
+    create_llm,
+    create_memory,
+    create_retriever,
+    init_vector_store,
+)
 
 
 def cli(args: Args):
@@ -24,14 +28,10 @@ def cli(args: Args):
         raise Exception("A repository must be specified")
 
     repo = Repo(repo_path)
-    branch = repo.active_branch.name
-    commit = repo.head.commit.hexsha
 
     db = init_vector_store(
-        repo_path=repo_path,
         sub_folder=sub_folder or "",
-        branch=branch,
-        commit=commit,
+        repo=repo,
         vector_db_dir=vector_db_dir,
     )
 

@@ -13,16 +13,10 @@ from codebase_indexer.api.cache import codebase_indexers
 from codebase_indexer.api.models import Command, Meta
 from codebase_indexer.cli import cli
 from codebase_indexer.cli.argparser import parse_args
-from codebase_indexer.constants import (
-    DEFAULT_OLLAMA_INFERENCE_MODEL,
-    DEFAULT_VECTOR_DB_DIR,
-)
-from codebase_indexer.rag import (
-    CodebaseIndexer,
-    create_llm,
-    create_memory,
-    init_vector_store,
-)
+from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
+                                        DEFAULT_VECTOR_DB_DIR)
+from codebase_indexer.rag import (CodebaseIndexer, create_llm, create_memory,
+                                  init_vector_store)
 
 app = FastAPI()
 
@@ -46,15 +40,11 @@ async def register(body: Meta):
         raise Exception("A repository must be specified")
 
     repo = Repo(repo_path)
-    branch = repo.active_branch.name
-    commit = repo.head.commit.hexsha
     key = repo_path.as_posix()
 
     db = init_vector_store(
-        repo_path=repo_path,
+        repo=repo,
         sub_folder=sub_folder or "",
-        branch=branch,
-        commit=commit,
         vector_db_dir=vector_db_dir,
     )
     llm = create_llm(
@@ -67,8 +57,7 @@ async def register(body: Meta):
     memory = create_memory(llm)
 
     codebase_indexers[key] = CodebaseIndexer(
-        repo_path=repo_path.as_posix(),
-        commit=commit,
+        repo=repo,
         vector_db_dir=vector_db_dir,
         ollama_inference_model=body.ollama_inference_model,
         memory=memory,

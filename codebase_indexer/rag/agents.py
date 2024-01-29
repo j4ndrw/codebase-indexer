@@ -23,13 +23,28 @@ def create_tools(llm: ChatOllama):
 
     file_path_extractor_prompt = PromptTemplate(
         input_variables=["question"],
-        template=f"""Only answer with the file paths provided in the question, in CSV format. If you can't find a file path in the question, answer with "N/A".
+        template=f"""Only answer with the file paths provided in the question. If you can't find a file path in the question, answer with "N/A". In your answer, delimit the paths by commas.
 
         A file path is any string that looks like this: path/to/file
 
         EXAMPLE START
         Question: Can you review my implementation from those files: path/to/file/a.js, path/to/file/b.rs and path/to/file/c.py
         Answer: path/to/file/a.js, path/to/file/b.rs, path/to/file/c.py
+        EXAMPLE END
+
+        EXAMPLE START
+        Question: Can you review my implementation from the path/to/file/a.js, path/to/file/b.rs and path/to/file/c.py files?
+        Answer: path/to/file/a.js, path/to/file/b.rs, path/to/file/c.py
+        EXAMPLE END
+
+        EXAMPLE START
+        Question: Can you review my implementation from this file: path/to/file/a.js
+        Answer: path/to/file/a.js
+        EXAMPLE END
+
+        EXAMPLE START
+        Question: Can you review my implementation from path/to/file/a.js?
+        Answer: path/to/file/a.js
         EXAMPLE END
 
         EXAMPLE START

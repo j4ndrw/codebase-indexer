@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from os import PathLike
 from typing import Any, TypedDict
 
+from git import Repo
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.manager import CallbackManager
 from langchain.chains import ConversationalRetrievalChain
@@ -10,7 +11,9 @@ from langchain.memory.chat_memory import BaseChatMemory
 from langchain.prompts import PromptTemplate
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import (
-    DocumentCompressorPipeline, EmbeddingsFilter)
+    DocumentCompressorPipeline,
+    EmbeddingsFilter,
+)
 from langchain.schema import BaseRetriever
 from langchain_community.chat_models import ChatOllama
 from langchain_community.document_transformers import EmbeddingsRedundantFilter
@@ -19,24 +22,29 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 
 from codebase_indexer.api.models import Command
-from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
-                                        MAX_SOURCES_WINDOW, OLLAMA_BASE_URL)
+from codebase_indexer.constants import (
+    DEFAULT_OLLAMA_INFERENCE_MODEL,
+    MAX_SOURCES_WINDOW,
+    OLLAMA_BASE_URL,
+)
 from codebase_indexer.rag.agents import create_tools
-from codebase_indexer.rag.chains import create_search_request_removal_chain
+from codebase_indexer.rag.chains import (
+    create_query_expansion_chain,
+    create_search_request_removal_chain,
+)
 from codebase_indexer.rag.prompts import (
     DEFAULT_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
     REVIEW_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
-    TEST_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT)
-from codebase_indexer.rag.vector_store import create_index, load_index
+    TEST_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
+)
+from codebase_indexer.rag.vector_store import create_index, load_docs, load_index
 from codebase_indexer.utils import strip_generated_text
 
 
 def init_vector_store(
     *,
-    repo_path: PathLike,
+    repo: Repo,
     sub_folder: str,
-    branch: str,
-    commit: str,
     vector_db_dir: str,
 ) -> VectorStore:
     embeddings_factory = lambda: HuggingFaceBgeEmbeddings(
@@ -46,14 +54,19 @@ def init_vector_store(
     )
 
     indexing_args = (
-        repo_path,
-        sub_folder,
-        branch,
-        commit,
+        repo,
         vector_db_dir,
         embeddings_factory,
     )
-    repo_path, db = load_index(*indexing_args) or create_index(*indexing_args)
+    db, documents_to_preload = load_index(*indexing_args)
+    if db is None:
+        db = create_index(
+            *indexing_args,
+            docs=load_docs(repo, sub_folder, documents_to_preload),
+            paths_to_exclude=[
+                doc.metadata["file_path"] for doc in documents_to_preload or []
+            ],
+        )
 
     return db
 
@@ -74,7 +87,8 @@ def create_llm(*, params: OllamaLLMParams) -> ChatOllama:
 
 def create_retriever(db: VectorStore):
     retriever_kwargs: dict[str, str | dict[str, Any]] = dict(
-        search_type="mmr", search_kwargs=dict(k=8, fetch_k=1000)
+        search_type="mmr",
+        search_kwargs=dict(k=8, fetch_k=1000),
     )
     return db.as_retriever(**retriever_kwargs)
 
@@ -152,6 +166,8 @@ class RAG:
         if "search" in extracted_commands:
             extracted_commands.remove("search")
             return ["search", *extracted_commands]  # type: ignore
+        if len(extracted_commands) == 0:
+            return ["general_chat"]
         return extracted_commands  # type: ignore
 
     @staticmethod
@@ -161,8 +177,19 @@ class RAG:
         _, file_path_extraction_tool = create_tools(llm)
         sources = sources or []
 
+        expanded_question = (
+            strip_generated_text(
+                create_query_expansion_chain(llm)
+                .invoke({"question": question})
+                .get("text", "")
+            )
+            or question
+        )
+
         file_paths = strip_generated_text(
-            file_path_extraction_tool.invoke({"question": question}).get("text", "")
+            file_path_extraction_tool.invoke({"question": expanded_question}).get(
+                "text", ""
+            )
         )
         if file_paths.lower() != "n/a":
             sources.extend([*map(lambda x: x.strip(), file_paths.split(","))])
@@ -228,8 +255,7 @@ class RAG:
 
 @dataclass()
 class CodebaseIndexer:
-    repo_path: str
-    commit: str
+    repo: Repo
     vector_db_dir: str | None
     ollama_inference_model: str | None
     db: VectorStore
