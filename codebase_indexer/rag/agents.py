@@ -13,10 +13,10 @@ def create_tools(llm: ChatOllama):
     file_path_extractor_chain = LLMChain(llm=llm, prompt=FILE_PATH_EXTRACTOR_PROMPT)
 
     command_tool = Tool(
-        name="Classify command",
+        name="Extract command",
         func=command_chain.invoke,
         return_direct=True,
-        description=f"Useful to figure out what command out of the following relates best to the question: {COMMANDS}.",
+        description=f"Useful to figure out what command out of the following relates best to the question.",
     )
     file_path_extractor_tool = Tool(
         name="Extract file path",

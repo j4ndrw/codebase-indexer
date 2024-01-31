@@ -21,8 +21,9 @@ from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from codebase_indexer.api.models import Command
 from codebase_indexer.constants import (DEFAULT_OLLAMA_INFERENCE_MODEL,
                                         MAX_SOURCES_WINDOW, OLLAMA_BASE_URL)
-from codebase_indexer.rag.agents import create_agent, create_tools
-from codebase_indexer.rag.chains import create_search_request_removal_chain
+from codebase_indexer.rag.agents import create_tools
+from codebase_indexer.rag.chains import (create_query_expansion_chain,
+                                         create_search_request_removal_chain)
 from codebase_indexer.rag.prompts import (
     DEFAULT_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
     REVIEW_CONVERSATIONAL_RETRIEVAL_CHAIN_PROMPT,
@@ -138,6 +139,15 @@ class RAG:
     def extract_commands(llm: ChatOllama, question: str) -> list[Command]:
         command_extraction_tool, _ = create_tools(llm)
 
+        expanded_question = (
+            strip_generated_text(
+                create_query_expansion_chain(llm)
+                .invoke({"question": question})
+                .get("text", "")
+            )
+            or question
+        )
+
         extracted_commands = [
             *filter(
                 lambda x: x.lower() != "n/a",  # type: ignore
@@ -145,11 +155,9 @@ class RAG:
                     lambda x: x.strip(),
                     (
                         strip_generated_text(
-                            create_agent(llm, [command_extraction_tool])
-                            .invoke({"input": question})
-                            .get("output", {})
+                            command_extraction_tool
+                            .invoke({"question": expanded_question })
                             .get("text", "")
-                            .removeprefix("Answer:")
                         )
                         or ""
                     ).split(", "),
@@ -167,24 +175,27 @@ class RAG:
     def extract_sources_to_search_in(
         llm: ChatOllama, question: str, sources: list[str] | None = None
     ) -> list[str]:
-        try:
-            _, file_path_extraction_tool = create_tools(llm)
-            sources = sources or []
+        _, file_path_extraction_tool = create_tools(llm)
+        sources = sources or []
 
-
-            file_paths = strip_generated_text(
-                create_agent(llm, [file_path_extraction_tool])
-                .invoke({"input": question})
-                .get("output", {})
+        expanded_question = (
+            strip_generated_text(
+                create_query_expansion_chain(llm)
+                .invoke({"question": question})
                 .get("text", "")
-                .removeprefix("Answer:")
             )
-            if file_paths.lower() != "n/a":
-                sources.extend([*map(lambda x: x.strip(), file_paths.split(","))])
+            or question
+        )
 
-            return sources
-        except ValueError:
-            return sources or []
+        file_paths = strip_generated_text(
+            file_path_extraction_tool.invoke({"question": expanded_question}).get(
+                "text", ""
+            )
+        )
+        if file_paths.lower() != "n/a":
+            sources.extend([*map(lambda x: x.strip(), file_paths.split(","))])
+
+        return sources
 
     @staticmethod
     def filter_on_sources(

@@ -51,7 +51,7 @@ def cli(args: Args):
         sources = RAG.extract_sources_to_search_in(llm, question, sources)
 
         for command in commands:
-            if command == "new_conversation":
+            if command == "forget_previous_conversation":
                 sources = []
                 continue
 

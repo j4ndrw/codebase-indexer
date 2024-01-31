@@ -15,7 +15,7 @@ COMMANDS: list[Command] = [
     "test",
     "search",
     "review",
-    "new_conversation",
+    "forget_previous_conversation",
     "general_chat",
 ]
 

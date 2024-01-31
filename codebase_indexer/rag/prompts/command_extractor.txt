@@ -1,4 +1,5 @@
-Only answer the question with the most suitable commands, out of: {commands}.
+Only answer the question with the most suitable commands.
+The available commands are: {commands}
 
 If only one command suits the question, the answer should looks like this: "command_1".
 If multiple commands suit the question, the answer should looks like this: "command_1, command_2, command_3".
