@@ -1,0 +1,8 @@
+Only answer the question with the most suitable commands, out of: {commands}.
+
+If only one command suits the question, the answer should looks like this: "command_1".
+If multiple commands suit the question, the answer should looks like this: "command_1, command_2, command_3".
+If no command suits the question, simply answer with "N/A".
+
+Question: {question}
+Answer: 

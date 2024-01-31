@@ -2,6 +2,8 @@ from pathlib import Path
 
 from langchain.prompts import PromptTemplate
 
+from codebase_indexer.constants import COMMANDS
+
 
 def read_prompt_template(file_path: str) -> str:
     template = ""
@@ -31,7 +33,19 @@ QUERY_EXPANSION_PROMPT = PromptTemplate(
     input_variables=["question"], template=read_prompt_template("./query_expansion.txt")
 )
 
-SEARCH_REQUEST_REMOVAL = PromptTemplate(
+SEARCH_REQUEST_REMOVAL_PROMPT = PromptTemplate(
     input_variables=["question"],
     template=read_prompt_template("./search_request_removal.txt"),
+)
+
+FILE_PATH_EXTRACTOR_PROMPT = PromptTemplate(
+    input_variables=["question"],
+    template=read_prompt_template("./file_path_extractor.txt"),
+)
+
+COMMAND_EXTRACTOR_PROMPT = PromptTemplate(
+    input_variables=["question"],
+    template=read_prompt_template("./command_extractor.txt")
+    # yuck.
+    .replace("{commands}", ", ".join(COMMANDS)),
 )
