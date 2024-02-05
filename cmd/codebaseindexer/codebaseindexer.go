@@ -1,0 +1,4 @@
+package codebaseindexer
+
+func main() {
+}
