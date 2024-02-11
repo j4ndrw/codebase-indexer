@@ -1,4 +1,0 @@
-package codebaseindexer
-
-func main() {
-}
